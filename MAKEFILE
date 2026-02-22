@@ -1,0 +1,3 @@
+.PHONY: publish-app
+publish-app:
+	cd ./app && npm run package && npm run publish
