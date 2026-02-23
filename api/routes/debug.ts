@@ -19,28 +19,16 @@ export function createDebugRouter(context: DebugContext): Router {
 
   // Get all rooms
   router.get("/rooms", (_req, res) => {
-    const rooms = (context.roomStateStore as any).rooms;
-    const roomList = Array.from(rooms.entries()).map(([key, room]: [string, any]) => {
-      const [workspaceId, roomId] = key.split(":");
-      return {
-        workspaceId,
-        roomId,
-        peerCount: room.peersByUserId.size,
-        activeScreenSharerUserId: room.activeScreenSharerUserId,
-      };
-    });
-
+    const roomList = context.roomStateStore.getAllRooms();
     res.json({ rooms: roomList });
   });
 
   // Get specific room details
   router.get("/rooms/:workspaceId/:roomId", (req, res) => {
     const { workspaceId, roomId } = req.params;
-    const rooms = (context.roomStateStore as any).rooms;
-    const roomKey = `${workspaceId}:${roomId}`;
-    const room = rooms.get(roomKey);
+    const roomDetails = context.roomStateStore.getRoomDetails(workspaceId, roomId);
 
-    if (!room) {
+    if (!roomDetails) {
       res.status(404).json({
         code: "room_not_found",
         message: "Room not found",
@@ -49,7 +37,7 @@ export function createDebugRouter(context: DebugContext): Router {
       return;
     }
 
-    const peers = Array.from(room.peersByUserId.values()).map((peer: any) => ({
+    const peers = roomDetails.peers.map((peer) => ({
       userId: peer.userId,
       displayName: peer.displayName,
       socketId: peer.socketId,
@@ -63,7 +51,7 @@ export function createDebugRouter(context: DebugContext): Router {
       roomId,
       peerCount: peers.length,
       peers,
-      activeScreenSharerUserId: room.activeScreenSharerUserId,
+      activeScreenSharerUserId: roomDetails.activeScreenSharerUserId,
     });
   });
 
@@ -73,7 +61,6 @@ export function createDebugRouter(context: DebugContext): Router {
     const socketInfo = sockets.map((socket) => ({
       id: socket.id,
       rooms: Array.from(socket.rooms),
-      connected: socket.connected,
     }));
 
     res.json({ sockets: socketInfo });
@@ -98,16 +85,13 @@ export function createDebugRouter(context: DebugContext): Router {
 
   // Get server statistics
   router.get("/stats", async (_req, res) => {
-    const rooms = (context.roomStateStore as any).rooms;
+    const rooms = context.roomStateStore.getAllRooms();
     const sockets = await context.io.fetchSockets();
 
     const stats = {
-      totalRooms: rooms.size,
+      totalRooms: rooms.length,
       totalSockets: sockets.length,
-      totalPeers: Array.from(rooms.values()).reduce(
-        (sum: number, room: any) => sum + room.peersByUserId.size,
-        0
-      ),
+      totalPeers: rooms.reduce((sum, room) => sum + room.peerCount, 0),
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       memory: process.memoryUsage(),

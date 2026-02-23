@@ -4,7 +4,11 @@
       "Bash(pnpm install:*)",
       "Bash(pnpm list:*)",
       "Bash(pnpm info:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm run lint)",
+      "Bash(curl:*)"
     ]
   }
 }

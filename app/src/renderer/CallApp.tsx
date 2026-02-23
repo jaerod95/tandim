@@ -32,6 +32,8 @@ export function CallApp() {
     [presence]
   );
 
+  const hasOthers = remoteTiles.length > 0;
+
   useEffect(() => {
     const hash = window.location.hash;
     const sessionId = hash.includes("?") ? new URLSearchParams(hash.split("?")[1]).get("sessionId") : null;
@@ -292,40 +294,170 @@ export function CallApp() {
 
   return (
     <main className="call-shell">
+      {/* Top Bar */}
       <header className="call-topbar">
-        <div>{session?.roomId ?? "Call"}</div>
-        <div className="status">{status}</div>
+        <div className="call-topbar-left">
+          <span className="call-room-name">{session?.roomId ?? "Call"}</span>
+          <span className="call-workspace">us-west1-a</span>
+        </div>
+        <div className="call-topbar-right">
+          <button className="call-icon-btn" title="Connection Info">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M0 8a8 8 0 1116 0A8 8 0 010 8zm8-6a6 6 0 100 12A6 6 0 008 2z"/>
+              <path d="M7 4h2v2H7V4zm0 4h2v6H7V8z"/>
+            </svg>
+          </button>
+          <button className="call-icon-btn" title="Notifications">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 0a1 1 0 011 1v.5A6 6 0 0114.5 8H15a1 1 0 010 2h-1a1 1 0 01-1-1 5 5 0 00-10 0 1 1 0 01-1 1H1a1 1 0 010-2h.5A6 6 0 017 1.5V1a1 1 0 011-1z"/>
+              <path d="M6 14a2 2 0 104 0H6z"/>
+            </svg>
+          </button>
+          <button className="call-icon-btn" title="Grid View">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M0 0h7v7H0V0zm9 0h7v7H9V0zM0 9h7v7H0V9zm9 0h7v7H9V9z"/>
+            </svg>
+          </button>
+          <button className="call-icon-btn" title="Pin">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M9.828.722a.5.5 0 01.354.146l4.95 4.95a.5.5 0 010 .707l-2.12 2.12 2.475 2.475a.5.5 0 01-.707.707L12.5 9.55l-2.12 2.12a.5.5 0 01-.707 0l-4.95-4.95a.5.5 0 010-.707L7.05 3.69 4.575 1.215a.5.5 0 11.707-.707L7.757 2.98l2.121-2.12a.5.5 0 01.354-.146z"/>
+            </svg>
+          </button>
+          <button className="call-icon-btn" title="More">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M3 8a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm5 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm5 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+            </svg>
+          </button>
+        </div>
       </header>
+
+      {/* Main Stage */}
       <section className="call-stage">
-        <article className="tile large">
-          <h2>You</h2>
-          <video ref={localVideoRef} autoPlay muted playsInline />
-        </article>
-        <section className="remote-grid">
-          {remoteTiles.map((tile) => (
-            <RemoteVideo key={tile.userId} label={tile.displayName} stream={tile.stream} />
-          ))}
-        </section>
+        {hasOthers ? (
+          <section className="remote-grid">
+            {remoteTiles.map((tile) => (
+              <RemoteVideo key={tile.userId} label={tile.displayName} stream={tile.stream} />
+            ))}
+          </section>
+        ) : (
+          <div className="empty-room">
+            <p className="empty-room-text">There's no one here!</p>
+          </div>
+        )}
       </section>
+
+      {/* Bottom Controls */}
       <footer className="call-controls">
-        <button onClick={() => toggleMic()} disabled={!joined}>
-          {micEnabled ? "Mute" : "Unmute"}
-        </button>
-        <button onClick={() => void toggleCamera()} disabled={!joined}>
-          {cameraEnabled ? "Camera Off" : "Camera On"}
-        </button>
-        <button onClick={() => void toggleScreen()} disabled={!joined}>
-          {screenSharing ? "Stop Share" : "Share Screen"}
-        </button>
-        <button className="danger" onClick={() => window.close()}>
-          Leave
-        </button>
+        <div className="call-controls-left">
+          <div className="control-group">
+            <span className="control-label">Mute</span>
+            <button
+              className={`control-btn ${!micEnabled ? 'active' : ''}`}
+              onClick={() => toggleMic()}
+              disabled={!joined}
+              title={micEnabled ? "Mute" : "Unmute"}
+            >
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                {micEnabled ? (
+                  <path d="M5 3a3 3 0 016 0v5a3 3 0 01-6 0V3zM3.5 8a.5.5 0 01.5.5 4 4 0 008 0 .5.5 0 011 0 5 5 0 01-4.5 4.975V15h1a.5.5 0 010 1h-3a.5.5 0 010-1h1v-1.525A5 5 0 013 8.5a.5.5 0 01.5-.5z"/>
+                ) : (
+                  <>
+                    <path d="M5 3a3 3 0 016 0v5a3 3 0 01-6 0V3z"/>
+                    <path d="M1 1l14 14" stroke="currentColor" strokeWidth="2"/>
+                  </>
+                )}
+              </svg>
+            </button>
+          </div>
+
+          <div className="control-group">
+            <span className="control-label">Camera</span>
+            <button
+              className={`control-btn ${cameraEnabled ? 'active' : ''}`}
+              onClick={() => void toggleCamera()}
+              disabled={!joined}
+              title={cameraEnabled ? "Turn Camera Off" : "Turn Camera On"}
+            >
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                {cameraEnabled ? (
+                  <path d="M0 4a2 2 0 012-2h8a2 2 0 012 2v1.586l2.707-2.707a1 1 0 011.707.707v8.828a1 1 0 01-1.707.707L12 10.414V12a2 2 0 01-2 2H2a2 2 0 01-2-2V4z"/>
+                ) : (
+                  <>
+                    <path d="M0 4a2 2 0 012-2h8a2 2 0 012 2v1.586l2.707-2.707a1 1 0 011.707.707v8.828a1 1 0 01-1.707.707L12 10.414V12a2 2 0 01-2 2H2a2 2 0 01-2-2V4z"/>
+                    <path d="M1 1l14 14" stroke="currentColor" strokeWidth="2"/>
+                  </>
+                )}
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div className="call-controls-center">
+          <div className="control-group">
+            <span className="control-label">Screen</span>
+            <button
+              className={`control-btn large ${screenSharing ? 'active' : ''}`}
+              onClick={() => void toggleScreen()}
+              disabled={!joined}
+              title={screenSharing ? "Stop Sharing" : "Share Screen"}
+            >
+              <svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M0 2a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H2a2 2 0 01-2-2V2zm8 9l2-2H6l2 2z"/>
+              </svg>
+              {screenSharing && <span className="sharing-indicator">■</span>}
+            </button>
+          </div>
+
+          <div className="control-group">
+            <span className="control-label">Chat</span>
+            <button className="control-btn" disabled={!joined} title="Chat">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M0 2a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4.414l-2.707 2.707A1 1 0 010 14V2z"/>
+              </svg>
+            </button>
+          </div>
+
+          <div className="control-group">
+            <span className="control-label">Reactions</span>
+            <button className="control-btn" disabled={!joined} title="Reactions">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM5 6a1 1 0 100-2 1 1 0 000 2zm6 0a1 1 0 100-2 1 1 0 000 2zM5.5 10a.5.5 0 01.5-.5h4a.5.5 0 010 1H6a.5.5 0 01-.5-.5z"/>
+              </svg>
+            </button>
+          </div>
+
+          <div className="control-group">
+            <span className="control-label">Widgets</span>
+            <button className="control-btn" disabled={!joined} title="Widgets">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M0 0h7v7H0V0zm9 0h7v7H9V0zM0 9h7v7H0V9zm9 0h7v7H9V9z"/>
+              </svg>
+            </button>
+          </div>
+
+          <div className="control-group">
+            <span className="control-label">More</span>
+            <button className="control-btn" disabled={!joined} title="More">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M3 8a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm5 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm5 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div className="call-controls-right">
+          <button className="leave-btn" onClick={() => window.close()}>
+            LEAVE
+          </button>
+          <div className="current-user">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '6px' }}>
+              <path d="M8 0a3 3 0 100 6 3 3 0 000-6z"/>
+              <path d="M12 8a2 2 0 00-2-2H6a2 2 0 00-2 2v4a2 2 0 002 2h4a2 2 0 002-2V8z"/>
+            </svg>
+            {session?.displayName ?? "You"}
+          </div>
+        </div>
       </footer>
-      <aside className="presence-strip">
-        {sortedPresence.map((entry) => (
-          <span key={entry.userId}>{entry.displayName}</span>
-        ))}
-      </aside>
     </main>
   );
 }

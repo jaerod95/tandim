@@ -20,7 +20,7 @@ interface MCPServerContext {
 }
 
 export function createMCPServer(context: MCPServerContext) {
-  const server = new StdioServer(
+  const server = new Server(
     {
       name: "tandim-api-inspector",
       version: "0.1.0",
@@ -32,100 +32,93 @@ export function createMCPServer(context: MCPServerContext) {
     }
   );
 
-  const tools: Tool[] = [
-    {
-      name: "get_all_rooms",
-      description: "Get a list of all active rooms with peer counts",
-      inputSchema: {
-        type: "object",
-        properties: {},
-      },
-    },
-    {
-      name: "get_room_details",
-      description: "Get detailed information about a specific room including all peers",
-      inputSchema: {
-        type: "object",
-        properties: {
-          workspaceId: {
-            type: "string",
-            description: "The workspace ID",
-          },
-          roomId: {
-            type: "string",
-            description: "The room ID",
-          },
-        },
-        required: ["workspaceId", "roomId"],
-      },
-    },
-    {
-      name: "get_socket_info",
-      description: "Get information about connected sockets",
-      inputSchema: {
-        type: "object",
-        properties: {},
-      },
-    },
-    {
-      name: "get_peer_by_socket",
-      description: "Get peer information by socket ID",
-      inputSchema: {
-        type: "object",
-        properties: {
-          socketId: {
-            type: "string",
-            description: "The socket ID",
-          },
-        },
-        required: ["socketId"],
-      },
-    },
-    {
-      name: "simulate_peer_disconnect",
-      description: "Simulate a peer disconnection for testing",
-      inputSchema: {
-        type: "object",
-        properties: {
-          socketId: {
-            type: "string",
-            description: "The socket ID to disconnect",
-          },
-        },
-        required: ["socketId"],
-      },
-    },
-    {
-      name: "get_server_stats",
-      description: "Get overall server statistics",
-      inputSchema: {
-        type: "object",
-        properties: {},
-      },
-    },
-  ];
-
+  // List tools
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools,
+    tools: [
+      {
+        name: "get_all_rooms",
+        description: "Get a list of all active rooms with peer counts",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
+        name: "get_room_details",
+        description: "Get detailed information about a specific room including all peers",
+        inputSchema: {
+          type: "object",
+          properties: {
+            workspaceId: {
+              type: "string",
+              description: "The workspace ID",
+            },
+            roomId: {
+              type: "string",
+              description: "The room ID",
+            },
+          },
+          required: ["workspaceId", "roomId"],
+        },
+      },
+      {
+        name: "get_socket_info",
+        description: "Get information about connected sockets",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
+        name: "get_peer_by_socket",
+        description: "Get peer information by socket ID",
+        inputSchema: {
+          type: "object",
+          properties: {
+            socketId: {
+              type: "string",
+              description: "The socket ID",
+            },
+          },
+          required: ["socketId"],
+        },
+      },
+      {
+        name: "simulate_peer_disconnect",
+        description: "Simulate a peer disconnection for testing",
+        inputSchema: {
+          type: "object",
+          properties: {
+            socketId: {
+              type: "string",
+              description: "The socket ID to disconnect",
+            },
+          },
+          required: ["socketId"],
+        },
+      },
+      {
+        name: "get_server_stats",
+        description: "Get overall server statistics",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+    ],
   }));
 
+  // Call tool
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     try {
       switch (name) {
         case "get_all_rooms": {
-          // Access internal state through reflection (add getter methods to RoomStateStore)
-          const rooms = (context.roomStateStore as any).rooms;
-          const roomList = Array.from(rooms.entries()).map(([key, room]: [string, any]) => {
-            const [workspaceId, roomId] = key.split(":");
-            return {
-              workspaceId,
-              roomId,
-              peerCount: room.peersByUserId.size,
-              activeScreenSharerUserId: room.activeScreenSharerUserId,
-            };
-          });
+          const roomList = context.roomStateStore.getAllRooms().map(room => ({
+            ...room,
+            activeScreenSharerUserId: null, // Add this via enhanced getter if needed
+          }));
 
           return {
             content: [
@@ -139,11 +132,9 @@ export function createMCPServer(context: MCPServerContext) {
 
         case "get_room_details": {
           const { workspaceId, roomId } = args as { workspaceId: string; roomId: string };
-          const rooms = (context.roomStateStore as any).rooms;
-          const roomKey = `${workspaceId}:${roomId}`;
-          const room = rooms.get(roomKey);
+          const roomDetails = context.roomStateStore.getRoomDetails(workspaceId, roomId);
 
-          if (!room) {
+          if (!roomDetails) {
             return {
               content: [
                 {
@@ -154,7 +145,7 @@ export function createMCPServer(context: MCPServerContext) {
             };
           }
 
-          const peers = Array.from(room.peersByUserId.values()).map((peer: any) => ({
+          const peers = roomDetails.peers.map((peer) => ({
             userId: peer.userId,
             displayName: peer.displayName,
             socketId: peer.socketId,
@@ -173,7 +164,7 @@ export function createMCPServer(context: MCPServerContext) {
                     roomId,
                     peerCount: peers.length,
                     peers,
-                    activeScreenSharerUserId: room.activeScreenSharerUserId,
+                    activeScreenSharerUserId: roomDetails.activeScreenSharerUserId,
                   },
                   null,
                   2
@@ -188,7 +179,6 @@ export function createMCPServer(context: MCPServerContext) {
           const socketInfo = sockets.map((socket) => ({
             id: socket.id,
             rooms: Array.from(socket.rooms),
-            connected: socket.connected,
           }));
 
           return {
@@ -254,16 +244,13 @@ export function createMCPServer(context: MCPServerContext) {
         }
 
         case "get_server_stats": {
-          const rooms = (context.roomStateStore as any).rooms;
+          const rooms = context.roomStateStore.getAllRooms();
           const sockets = await context.io.fetchSockets();
 
           const stats = {
-            totalRooms: rooms.size,
+            totalRooms: rooms.length,
             totalSockets: sockets.length,
-            totalPeers: Array.from(rooms.values()).reduce(
-              (sum: number, room: any) => sum + room.peersByUserId.size,
-              0
-            ),
+            totalPeers: rooms.reduce((sum, room) => sum + room.peerCount, 0),
             timestamp: new Date().toISOString(),
           };
 
@@ -306,10 +293,9 @@ export function createMCPServer(context: MCPServerContext) {
 
 export async function startMCPServer(context: MCPServerContext) {
   const server = createMCPServer(context);
-  await server.connect({
-    reader: process.stdin,
-    writer: process.stdout,
-  });
+  const transport = new StdioServerTransport();
+
+  await server.connect(transport);
 
   console.error("Tandim API MCP Server running");
 }

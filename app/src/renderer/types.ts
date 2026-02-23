@@ -11,10 +11,10 @@ export type CallSession = {
 };
 
 export const ROOMS = [
-  "Team Standup",
-  "Lounge",
-  "Meeting Room",
-  "Help Needed",
-  "Coffee Break",
-  "Library - Co-Working"
+  { name: "Team Standup", emoji: "👥" },
+  { name: "Lounge", emoji: "🏖️" },
+  { name: "Meeting Room", emoji: "📋" },
+  { name: "Help Needed", emoji: "⚡" },
+  { name: "Coffee Break", emoji: "☕" },
+  { name: "Library - Co-Working", emoji: "📚" }
 ];
