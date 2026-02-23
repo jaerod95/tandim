@@ -1,103 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
 import { io, type Socket } from "socket.io-client";
-import "./index.css";
+import { RemoteVideo } from "./RemoteVideo";
+import type { CallSession, IceConfig, PresenceEntry, SignalPeer, RemoteTile } from "./types";
+import { upsertPresence, upsertRemoteTile } from "./utils";
 
-type SignalPeer = { userId: string; displayName: string };
-type IceConfig = { iceServers: RTCIceServer[] };
-type PresenceEntry = { userId: string; displayName: string; state: "you" | "connected" };
-type RemoteTile = { userId: string; displayName: string; stream: MediaStream };
-type CallSession = { apiUrl: string; workspaceId: string; roomId: string; displayName: string; userId: string };
-
-const ROOMS = ["Team Standup", "Lounge", "Meeting Room", "Help Needed", "Coffee Break", "Library - Co-Working"];
-
-function LobbyApp() {
-  const [apiUrl, setApiUrl] = useState("http://localhost:3000");
-  const [workspaceId, setWorkspaceId] = useState("team-local");
-  const [displayName, setDisplayName] = useState("Jrod");
-  const [selectedRoom, setSelectedRoom] = useState("Team Standup");
-  const [status, setStatus] = useState("Pick a room and click Join");
-
-  useEffect(() => {
-    window.tandem?.getPendingRoom().then((pending) => {
-      if (pending) {
-        setSelectedRoom(pending);
-      }
-    });
-    window.tandem?.onDeepLinkRoom((nextRoom) => {
-      setSelectedRoom(nextRoom);
-      setStatus(`Loaded deep link room ${nextRoom}`);
-    });
-  }, []);
-
-  async function joinSelectedRoom(): Promise<void> {
-    const payload: CallSession = {
-      apiUrl: apiUrl.trim(),
-      workspaceId: workspaceId.trim(),
-      roomId: selectedRoom,
-      displayName: displayName.trim() || "Engineer",
-      userId: `u-${Math.random().toString(36).slice(2, 8)}`
-    };
-    await window.tandem?.openCallWindow(payload);
-    setStatus(`Opened call window for ${selectedRoom}`);
-  }
-
-  return (
-    <main className="tandem-shell">
-      <header className="topbar">
-        <span>Personal Team</span>
-      </header>
-      <section className="lobby">
-        <aside className="rooms-col">
-          <div className="rooms-header">
-            <span>Rooms</span>
-            <button className="small-btn">+</button>
-          </div>
-          <ul className="rooms-list">
-            {ROOMS.map((room) => (
-              <li key={room} className={room === selectedRoom ? "active" : ""} onClick={() => setSelectedRoom(room)}>
-                <span>🔊</span>
-                <span>{room}</span>
-                {room === selectedRoom ? <button className="join-inline" onClick={() => void joinSelectedRoom()}>Join</button> : null}
-              </li>
-            ))}
-          </ul>
-        </aside>
-
-        <section className="team-col">
-          <div className="panel-title">Team</div>
-          <div className="member">🟢 {displayName} (you)</div>
-          <div className="member">⚪ Jordan</div>
-          <button className="primary wide">Invite Teammates</button>
-        </section>
-
-        <aside className="details-col">
-          <h3>{selectedRoom}</h3>
-          <button className="primary wide" onClick={() => void joinSelectedRoom()}>
-            Join
-          </button>
-          <button className="ghost wide">Join w/o audio</button>
-          <p className="description">Come here to run your team standup. This panel mirrors Tandem room details.</p>
-          <label className="field">
-            <span>API URL</span>
-            <input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Workspace ID</span>
-            <input value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Display name</span>
-            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-          </label>
-          <p className="status">{status}</p>
-        </aside>
-      </section>
-    </main>
-  );
-}
-
-function CallApp() {
+export function CallApp() {
   const [status, setStatus] = useState("Connecting...");
   const [presence, setPresence] = useState<PresenceEntry[]>([]);
   const [remoteTiles, setRemoteTiles] = useState<RemoteTile[]>([]);
@@ -132,6 +39,7 @@ function CallApp() {
       setStatus("Missing session id");
       return;
     }
+
     window.tandem?.getCallSession(sessionId).then(async (loaded) => {
       if (!loaded) {
         setStatus("Call session not found");
@@ -141,18 +49,14 @@ function CallApp() {
       await joinCall(loaded);
     });
 
-    return () => {
-      cleanupCallState();
-    };
-  }, []);
-
-  useEffect(() => {
     const onBeforeUnload = () => {
       cleanupCallState();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
+
     return () => {
       window.removeEventListener("beforeunload", onBeforeUnload);
+      cleanupCallState();
     };
   }, []);
 
@@ -162,6 +66,7 @@ function CallApp() {
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = localStreamRef.current;
       }
+
       const socket = io(current.apiUrl, { path: "/api/signal", transports: ["websocket"] });
       socketRef.current = socket;
 
@@ -232,9 +137,14 @@ function CallApp() {
     }
   }
 
-  async function ensurePeerConnection(current: CallSession, peerUserId: string, createOffer: boolean): Promise<RTCPeerConnection> {
+  async function ensurePeerConnection(
+    current: CallSession,
+    peerUserId: string,
+    createOffer: boolean
+  ): Promise<RTCPeerConnection> {
     const existing = peersRef.current.get(peerUserId);
     if (existing) return existing;
+
     const response = await fetch(`${current.apiUrl}/api/ice-config`);
     const ice = (await response.json()) as IceConfig;
     const pc = new RTCPeerConnection(ice);
@@ -316,6 +226,14 @@ function CallApp() {
     }, 15_000);
   }
 
+  function toggleMic(): void {
+    const next = !micEnabled;
+    for (const track of localStreamRef.current?.getAudioTracks() ?? []) {
+      track.enabled = next;
+    }
+    setMicEnabled(next);
+  }
+
   async function toggleCamera(): Promise<void> {
     if (!localStreamRef.current || !session) return;
     if (cameraEnabled) {
@@ -332,28 +250,25 @@ function CallApp() {
         setCameraEnabled(true);
       }
     }
-    if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
-    await renegotiateAllPeers(session);
-  }
-
-  function toggleMic(): void {
-    const next = !micEnabled;
-    for (const track of localStreamRef.current?.getAudioTracks() ?? []) {
-      track.enabled = next;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = localStreamRef.current;
     }
-    setMicEnabled(next);
+    await renegotiateAllPeers(session);
   }
 
   async function toggleScreen(): Promise<void> {
     if (!socketRef.current || !session) return;
     if (screenStreamRef.current) {
-      for (const track of screenStreamRef.current.getTracks()) track.stop();
+      for (const track of screenStreamRef.current.getTracks()) {
+        track.stop();
+      }
       screenStreamRef.current = null;
       socketRef.current.emit("signal:screen-share-stop");
       setScreenSharing(false);
       await renegotiateAllPeers(session);
       return;
     }
+
     const screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
     const track = screen.getVideoTracks()[0];
     if (track) {
@@ -393,7 +308,9 @@ function CallApp() {
         </section>
       </section>
       <footer className="call-controls">
-        <button onClick={() => toggleMic()} disabled={!joined}>{micEnabled ? "Mute" : "Unmute"}</button>
+        <button onClick={() => toggleMic()} disabled={!joined}>
+          {micEnabled ? "Mute" : "Unmute"}
+        </button>
         <button onClick={() => void toggleCamera()} disabled={!joined}>
           {cameraEnabled ? "Camera Off" : "Camera On"}
         </button>
@@ -412,34 +329,3 @@ function CallApp() {
     </main>
   );
 }
-
-function RemoteVideo(props: { label: string; stream: MediaStream }) {
-  const ref = useRef<HTMLVideoElement | null>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.srcObject = props.stream;
-  }, [props.stream]);
-  return (
-    <article className="tile">
-      <h2>{props.label}</h2>
-      <video ref={ref} autoPlay playsInline />
-    </article>
-  );
-}
-
-function upsertPresence(current: PresenceEntry[], next: PresenceEntry): PresenceEntry[] {
-  const map = new Map(current.map((entry) => [entry.userId, entry]));
-  map.set(next.userId, next);
-  return Array.from(map.values());
-}
-
-function upsertRemoteTile(current: RemoteTile[], next: RemoteTile): RemoteTile[] {
-  const map = new Map(current.map((entry) => [entry.userId, entry]));
-  map.set(next.userId, next);
-  return Array.from(map.values());
-}
-
-const mode = window.location.hash.startsWith("#call") ? "call" : "lobby";
-const mount = document.getElementById("root");
-if (!mount) throw new Error("Missing root container");
-createRoot(mount).render(mode === "call" ? <CallApp /> : <LobbyApp />);
-

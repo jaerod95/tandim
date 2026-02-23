@@ -15,6 +15,29 @@ const callSessions = new Map<
   { apiUrl: string; workspaceId: string; roomId: string; displayName: string; userId: string }
 >();
 
+function registerIpcHandlers(): void {
+  ipcMain.removeHandler("deep-link:getPendingRoom");
+  ipcMain.removeHandler("call:openWindow");
+  ipcMain.removeHandler("call:getSession");
+
+  ipcMain.handle("deep-link:getPendingRoom", () => pendingRoomId);
+  ipcMain.handle(
+    "call:openWindow",
+    (
+      _event,
+      payload: { apiUrl: string; workspaceId: string; roomId: string; displayName: string; userId: string }
+    ) => {
+      const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      callSessions.set(sessionId, payload);
+      createCallWindow(sessionId);
+      return { sessionId };
+    }
+  );
+  ipcMain.handle("call:getSession", (_event, sessionId: string) => {
+    return callSessions.get(sessionId) ?? null;
+  });
+}
+
 const createWindow = () => {
   const window = new BrowserWindow({
     width: 1320,
@@ -85,23 +108,8 @@ app.on("open-url", (event, url) => {
 });
 
 app.on("ready", () => {
+  registerIpcHandlers();
   mainWindow = createWindow();
-  ipcMain.handle("deep-link:getPendingRoom", () => pendingRoomId);
-  ipcMain.handle(
-    "call:openWindow",
-    (
-      _event,
-      payload: { apiUrl: string; workspaceId: string; roomId: string; displayName: string; userId: string }
-    ) => {
-      const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      callSessions.set(sessionId, payload);
-      createCallWindow(sessionId);
-      return { sessionId };
-    }
-  );
-  ipcMain.handle("call:getSession", (_event, sessionId: string) => {
-    return callSessions.get(sessionId) ?? null;
-  });
 });
 
 app.on("window-all-closed", () => {
