@@ -10,11 +10,15 @@ if (started) {
 
 let mainWindow: BrowserWindow | null = null;
 let pendingRoomId: string | null = null;
+const callSessions = new Map<
+  string,
+  { apiUrl: string; workspaceId: string; roomId: string; displayName: string; userId: string }
+>();
 
 const createWindow = () => {
   const window = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1320,
+    height: 840,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -32,6 +36,29 @@ const createWindow = () => {
 
   return window;
 };
+
+function createCallWindow(sessionId: string): BrowserWindow {
+  const window = new BrowserWindow({
+    width: 1200,
+    height: 760,
+    title: "Tandim Call",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    window.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#call?sessionId=${encodeURIComponent(sessionId)}`);
+  } else {
+    window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), {
+      hash: `call?sessionId=${encodeURIComponent(sessionId)}`
+    });
+  }
+
+  return window;
+}
 
 function handleDeepLink(url: string): void {
   const parsed = parseTandemDeepLink(url);
@@ -60,6 +87,21 @@ app.on("open-url", (event, url) => {
 app.on("ready", () => {
   mainWindow = createWindow();
   ipcMain.handle("deep-link:getPendingRoom", () => pendingRoomId);
+  ipcMain.handle(
+    "call:openWindow",
+    (
+      _event,
+      payload: { apiUrl: string; workspaceId: string; roomId: string; displayName: string; userId: string }
+    ) => {
+      const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      callSessions.set(sessionId, payload);
+      createCallWindow(sessionId);
+      return { sessionId };
+    }
+  );
+  ipcMain.handle("call:getSession", (_event, sessionId: string) => {
+    return callSessions.get(sessionId) ?? null;
+  });
 });
 
 app.on("window-all-closed", () => {

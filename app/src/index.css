@@ -171,3 +171,162 @@ video {
   background: #080b12;
   min-height: 170px;
 }
+
+.tandem-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 50px 1fr;
+}
+
+.topbar {
+  border-bottom: 1px solid #1f2633;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  color: #c9d2df;
+  background: #121722;
+}
+
+.lobby {
+  display: grid;
+  grid-template-columns: 330px 1fr 360px;
+  min-height: calc(100vh - 50px);
+}
+
+.rooms-col,
+.team-col,
+.details-col {
+  border-right: 1px solid #1f2633;
+  padding: 14px;
+}
+
+.details-col {
+  border-right: 0;
+  border-left: 1px solid #1f2633;
+}
+
+.rooms-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #9aa6ba;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.small-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: #1b2331;
+}
+
+.rooms-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rooms-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  color: #cfd8e6;
+  cursor: pointer;
+}
+
+.rooms-list li.active {
+  background: #1d2534;
+}
+
+.join-inline {
+  margin-left: auto;
+  height: 26px;
+  font-size: 12px;
+  background: #2b64f1;
+}
+
+.panel-title {
+  text-transform: uppercase;
+  color: #9aa6ba;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.member {
+  color: #cfd8e6;
+  margin-bottom: 8px;
+}
+
+.wide {
+  width: 100%;
+}
+
+.primary {
+  background: #4d49de;
+}
+
+.ghost {
+  background: #1f2633;
+  color: #cfd8e6;
+}
+
+.description {
+  color: #9aa6ba;
+  font-size: 12px;
+}
+
+.call-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 44px 1fr 58px 30px;
+}
+
+.call-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #20293a;
+  padding: 0 12px;
+  background: #111722;
+}
+
+.call-stage {
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 12px;
+}
+
+.tile.large video {
+  min-height: 420px;
+}
+
+.call-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-top: 1px solid #20293a;
+}
+
+.danger {
+  background: #b7443b;
+  margin-left: auto;
+}
+
+.presence-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-top: 1px solid #20293a;
+  color: #9aa6ba;
+  font-size: 12px;
+}
