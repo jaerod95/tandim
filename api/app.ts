@@ -7,6 +7,16 @@ import apiRouter from "./routes/api";
 const app = express();
 
 app.use(logger("dev"));
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Slack-Request-Timestamp, X-Slack-Signature");
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
 app.use(
   express.json({
     verify: (req, _res, buf) => {

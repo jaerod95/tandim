@@ -103,17 +103,23 @@ function App(): JSX.Element {
 
       socket.on("signal:joined", async (payload: { peers: SignalPeer[] }) => {
         setPresence([{ userId: userIdRef.current, displayName: displayName.trim() || "Engineer", state: "you" }]);
+        setJoined(true);
+        setStatus(`Joined ${roomId.trim()}`);
         for (const peer of payload.peers) {
           if (peer.userId === userIdRef.current) {
             continue;
           }
           peerNamesRef.current.set(peer.userId, peer.displayName);
           setPresence((prev) => upsertPresence(prev, { ...peer, state: "connected" }));
-          await ensurePeerConnection(peer.userId, true);
+          try {
+            // Existing peers will initiate offers when they receive signal:peer-joined.
+            // Avoiding a second simultaneous offer here prevents WebRTC glare.
+            await ensurePeerConnection(peer.userId, false);
+          } catch (error) {
+            setStatus(`Joined, but peer setup failed: ${(error as Error).message}`);
+          }
         }
         startHeartbeat();
-        setJoined(true);
-        setStatus(`Joined ${roomId.trim()}`);
       });
 
       socket.on("signal:peer-joined", async (peer: SignalPeer) => {
