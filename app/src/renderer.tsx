@@ -487,7 +487,12 @@ function upsertRemoteTile(current: RemoteTile[], next: RemoteTile): RemoteTile[]
   return Array.from(map.values());
 }
 
-const rootEl = document.createElement("div");
-document.body.innerHTML = "";
-document.body.appendChild(rootEl);
-createRoot(rootEl).render(<App />);
+const mount = document.getElementById("root");
+if (!mount) {
+  throw new Error("Missing root container");
+}
+createRoot(mount).render(<App />);
+
+if (import.meta.hot) {
+  import.meta.hot.accept();
+}

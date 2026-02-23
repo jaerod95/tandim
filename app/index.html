@@ -3,70 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <title>Tandim</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0d1117;
+        color: #d1d7e0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      #root {
+        min-height: 100%;
+      }
+      .boot-splash {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        color: #98a2b3;
+        letter-spacing: 0.2px;
+      }
+    </style>
   </head>
   <body>
-    <main class="layout">
-      <section class="sidebar">
-        <h1>Tandim</h1>
-        <p class="subtitle">Mesh audio/video with screen share</p>
-
-        <label class="field">
-          <span>API URL</span>
-          <input id="api-url" type="text" value="http://localhost:3000" />
-        </label>
-
-        <label class="field">
-          <span>Workspace ID</span>
-          <input id="workspace-id" type="text" value="team-local" />
-        </label>
-
-        <label class="field">
-          <span>Room ID</span>
-          <input id="room-id" type="text" value="daily-sync" />
-        </label>
-        <div class="quick-rooms">
-          <span>Quick rooms</span>
-          <div class="chip-row">
-            <button class="chip" data-room="daily-sync">daily-sync</button>
-            <button class="chip" data-room="pairing">pairing</button>
-            <button class="chip" data-room="war-room">war-room</button>
-            <button class="chip" data-room="lounge">lounge</button>
-          </div>
-        </div>
-
-        <label class="field">
-          <span>Display name</span>
-          <input id="display-name" type="text" value="Engineer" />
-        </label>
-
-        <div class="actions">
-          <button id="join-button">Join room</button>
-          <button id="leave-button" disabled>Leave room</button>
-        </div>
-
-        <div class="actions">
-          <button id="toggle-mic" disabled>Mute mic</button>
-          <button id="toggle-camera" disabled>Enable camera</button>
-          <button id="toggle-screen" disabled>Share screen</button>
-        </div>
-
-        <p id="status" class="status">Idle</p>
-        <section class="presence">
-          <h2>In this room</h2>
-          <ul id="presence-list"></ul>
-        </section>
-      </section>
-
-      <section class="content">
-        <div class="video-grid">
-          <article class="tile">
-            <h2>You</h2>
-            <video id="local-video" autoplay muted playsinline></video>
-          </article>
-          <section id="remote-videos" class="remote-grid"></section>
-        </div>
-      </section>
-    </main>
+    <div id="root">
+      <div class="boot-splash">Launching Tandim...</div>
+    </div>
     <script type="module" src="/src/renderer.tsx"></script>
   </body>
 </html>

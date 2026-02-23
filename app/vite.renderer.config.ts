@@ -1,3 +1,7 @@
 import { defineConfig } from "vite";
 
-export default defineConfig({});
+export default defineConfig({
+  server: {
+    hmr: true
+  }
+});
