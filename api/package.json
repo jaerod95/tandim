@@ -8,9 +8,13 @@
     "start": "pnpm run build && node ./dist/bin/www.js",
     "test": "vitest run",
     "lint": "eslint \"**/*.ts\" --ignore-pattern dist",
-    "smoke:render": "tsx ./scripts/smoke-render.ts"
+    "smoke:render": "tsx ./scripts/smoke-render.ts",
+    "mcp": "tsx ./bin/mcp.ts",
+    "test:scenarios": "tsx ./scripts/run-test-scenarios.ts",
+    "inspect": "tsx ./scripts/inspect-api.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@slack/web-api": "^7.11.0",
     "cookie-parser": "~1.4.4",
     "debug": "~2.6.9",

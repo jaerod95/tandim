@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "tandim-api": {
+      "command": "pnpm",
+      "args": ["-C", "api", "run", "mcp"],
+      "description": "Tandim API introspection server - provides tools to inspect rooms, peers, and WebRTC sessions"
+    }
+  }
+}

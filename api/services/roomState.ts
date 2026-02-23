@@ -214,4 +214,27 @@ export class RoomStateStore {
   private toRoomKey(workspaceId: string, roomId: string): string {
     return `${workspaceId}:${roomId}`;
   }
+
+  // Introspection methods for debugging
+  getAllRooms(): Array<{ workspaceId: string; roomId: string; peerCount: number }> {
+    return Array.from(this.rooms.entries()).map(([key, room]) => {
+      const [workspaceId, roomId] = key.split(":");
+      return {
+        workspaceId,
+        roomId,
+        peerCount: room.peersByUserId.size,
+      };
+    });
+  }
+
+  getRoomDetails(workspaceId: string, roomId: string): { peers: Peer[]; activeScreenSharerUserId: string | null } | null {
+    const room = this.rooms.get(this.toRoomKey(workspaceId, roomId));
+    if (!room) {
+      return null;
+    }
+    return {
+      peers: Array.from(room.peersByUserId.values()),
+      activeScreenSharerUserId: room.activeScreenSharerUserId,
+    };
+  }
 }

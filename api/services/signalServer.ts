@@ -17,13 +17,13 @@ const relaySchema = z.object({
   payload: z.unknown()
 });
 
-export function createSignalServer(httpServer: HttpServer): Server {
+export function createSignalServer(httpServer: HttpServer, roomStateStore?: RoomStateStore): Server {
   const io = new Server(httpServer, {
     cors: { origin: "*" },
     path: "/api/signal"
   });
 
-  const rooms = new RoomStateStore();
+  const rooms = roomStateStore ?? new RoomStateStore();
 
   io.on("connection", (socket) => {
     socket.on("signal:join", (input: unknown) => {
