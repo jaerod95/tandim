@@ -1,4 +1,8 @@
 packages:
-  - "api"
-  - "app"
-  - "slack-app"
+  - api
+  - app
+  - slack-app
+
+ignoreScripts: false
+
+nodeLinker: hoisted
