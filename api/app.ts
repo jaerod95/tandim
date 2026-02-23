@@ -1,20 +1,44 @@
 import express from "express";
-import path from "path";
 import cookieParser from "cookie-parser";
 import logger from "morgan";
 
-import indexRouter from "./routes/index";
-import usersRouter from "./routes/users";
+import apiRouter from "./routes/api";
 
 const app = express();
 
 app.use(logger("dev"));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    }
+  })
+);
+app.use(
+  express.urlencoded({
+    extended: false,
+    verify: (req, _res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    }
+  })
+);
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, "public")));
 
-app.use("/", indexRouter);
-app.use("/users", usersRouter);
+app.use("/api", apiRouter);
+app.use("/api/*", (_req, res) => {
+  res.status(404).json({
+    code: "not_found",
+    message: "API route not found",
+    retryable: false
+  });
+});
+
+app.use((_req, res) => {
+  res.status(404).json({
+    code: "not_found",
+    message: "Route not found",
+    retryable: false
+  });
+});
 
 export default app;

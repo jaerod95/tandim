@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: tandim-api
+    runtime: node
+    rootDir: .
+    buildCommand: corepack pnpm install && corepack pnpm --filter api build
+    startCommand: corepack pnpm --filter api start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: STUN_URL
+        value: stun:stun.l.google.com:19302
+      - key: TURN_URL
+        fromService:
+          type: pserv
+          name: tandim-turn
+          property: hostport
+      - key: TURN_USERNAME
+        sync: false
+      - key: TURN_CREDENTIAL
+        sync: false
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+  - type: pserv
+    name: tandim-turn
+    runtime: docker
+    rootDir: .
+    dockerfilePath: infra/turn.Dockerfile
+databases:
+  - name: tandim-postgres
+    databaseName: tandim

@@ -1,0 +1,15 @@
+{
+  "name": "tandim-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "api",
+    "app",
+    "slack-app"
+  ],
+  "scripts": {
+    "test": "pnpm -r --if-present run test",
+    "lint": "pnpm -r --if-present run lint",
+    "build": "pnpm -r --if-present run build"
+  }
+}

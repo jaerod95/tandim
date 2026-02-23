@@ -2,6 +2,7 @@ import http from "http";
 import createDebug from "debug";
 
 import app from "../app";
+import { createSignalServer } from "../services/signalServer";
 
 const debug = createDebug("api:server");
 const port = normalizePort(process.env.PORT ?? "3000");
@@ -9,6 +10,7 @@ const port = normalizePort(process.env.PORT ?? "3000");
 app.set("port", port);
 
 const server = http.createServer(app);
+createSignalServer(server);
 
 server.listen(port);
 server.on("error", onError);
@@ -39,9 +41,11 @@ function onError(error: NodeJS.ErrnoException): never | void {
     case "EACCES":
       console.error(`${bind} requires elevated privileges`);
       process.exit(1);
+      return;
     case "EADDRINUSE":
       console.error(`${bind} is already in use`);
       process.exit(1);
+      return;
     default:
       throw error;
   }
