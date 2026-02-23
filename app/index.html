@@ -2,12 +2,58 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Hello World!</title>
-
+    <title>Tandim</title>
   </head>
   <body>
-    <h1>💖 Hello World!</h1>
-    <p>Welcome to your Electron application.</p>
+    <main class="layout">
+      <section class="sidebar">
+        <h1>Tandim</h1>
+        <p class="subtitle">Mesh audio/video with screen share</p>
+
+        <label class="field">
+          <span>API URL</span>
+          <input id="api-url" type="text" value="http://localhost:3000" />
+        </label>
+
+        <label class="field">
+          <span>Workspace ID</span>
+          <input id="workspace-id" type="text" value="team-local" />
+        </label>
+
+        <label class="field">
+          <span>Room ID</span>
+          <input id="room-id" type="text" value="daily-sync" />
+        </label>
+
+        <label class="field">
+          <span>Display name</span>
+          <input id="display-name" type="text" value="Engineer" />
+        </label>
+
+        <div class="actions">
+          <button id="join-button">Join room</button>
+          <button id="leave-button" disabled>Leave room</button>
+        </div>
+
+        <div class="actions">
+          <button id="toggle-mic" disabled>Mute mic</button>
+          <button id="toggle-camera" disabled>Enable camera</button>
+          <button id="toggle-screen" disabled>Share screen</button>
+        </div>
+
+        <p id="status" class="status">Idle</p>
+      </section>
+
+      <section class="content">
+        <div class="video-grid">
+          <article class="tile">
+            <h2>You</h2>
+            <video id="local-video" autoplay muted playsinline></video>
+          </article>
+          <section id="remote-videos" class="remote-grid"></section>
+        </div>
+      </section>
+    </main>
     <script type="module" src="/src/renderer.ts"></script>
   </body>
 </html>

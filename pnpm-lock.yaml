@@ -77,6 +77,9 @@ importers:
       electron-squirrel-startup:
         specifier: ^1.0.1
         version: 1.0.1
+      socket.io-client:
+        specifier: ^4.8.1
+        version: 4.8.3
     devDependencies:
       '@electron-forge/cli':
         specifier: ^7.11.1
