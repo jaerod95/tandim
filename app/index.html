@@ -24,6 +24,15 @@
           <span>Room ID</span>
           <input id="room-id" type="text" value="daily-sync" />
         </label>
+        <div class="quick-rooms">
+          <span>Quick rooms</span>
+          <div class="chip-row">
+            <button class="chip" data-room="daily-sync">daily-sync</button>
+            <button class="chip" data-room="pairing">pairing</button>
+            <button class="chip" data-room="war-room">war-room</button>
+            <button class="chip" data-room="lounge">lounge</button>
+          </div>
+        </div>
 
         <label class="field">
           <span>Display name</span>
@@ -42,6 +51,10 @@
         </div>
 
         <p id="status" class="status">Idle</p>
+        <section class="presence">
+          <h2>In this room</h2>
+          <ul id="presence-list"></ul>
+        </section>
       </section>
 
       <section class="content">

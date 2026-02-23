@@ -64,6 +64,30 @@ button {
   cursor: pointer;
 }
 
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-rooms {
+  margin-bottom: 12px;
+}
+
+.quick-rooms > span {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #aeb5c1;
+}
+
+.chip {
+  background: #20283a;
+  border: 1px solid #39445f;
+  height: 28px;
+  font-size: 12px;
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -72,6 +96,41 @@ button:disabled {
 .status {
   margin-top: 14px;
   font-size: 13px;
+  color: #9be2b1;
+}
+
+.presence {
+  margin-top: 16px;
+  border-top: 1px solid #252936;
+  padding-top: 12px;
+}
+
+.presence h2 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #aeb5c1;
+}
+
+.presence ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.presence li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  border: 1px solid #2c3344;
+  border-radius: 8px;
+  padding: 7px 8px;
+}
+
+.presence .state {
   color: #9be2b1;
 }
 

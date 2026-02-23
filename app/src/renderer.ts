@@ -1,5 +1,6 @@
 import { io, type Socket } from "socket.io-client";
 import "./index.css";
+import { PresenceState } from "./presence";
 
 type SignalPeer = { userId: string; displayName: string };
 type IceConfig = { iceServers: RTCIceServer[] };
@@ -15,10 +16,12 @@ const state = {
   screenStream: null as MediaStream | null,
   peers: new Map<string, RTCPeerConnection>(),
   remoteStreams: new Map<string, MediaStream>(),
+  peerDisplayNames: new Map<string, string>(),
   heartbeatTimer: 0 as number | undefined,
   micEnabled: true,
   cameraEnabled: false
 };
+const presence = new PresenceState();
 
 const els = {
   apiUrl: must<HTMLInputElement>("api-url"),
@@ -32,6 +35,7 @@ const els = {
   toggleScreen: must<HTMLButtonElement>("toggle-screen"),
   localVideo: must<HTMLVideoElement>("local-video"),
   remoteVideos: must<HTMLDivElement>("remote-videos"),
+  presenceList: must<HTMLUListElement>("presence-list"),
   status: must<HTMLParagraphElement>("status")
 };
 
@@ -40,6 +44,15 @@ els.leaveButton.addEventListener("click", leaveRoom);
 els.toggleMic.addEventListener("click", toggleMic);
 els.toggleCamera.addEventListener("click", toggleCamera);
 els.toggleScreen.addEventListener("click", toggleScreenShare);
+for (const chip of Array.from(document.querySelectorAll<HTMLButtonElement>(".chip"))) {
+  chip.addEventListener("click", () => {
+    const room = chip.dataset.room;
+    if (!room) {
+      return;
+    }
+    void switchRoom(room);
+  });
+}
 
 wireDeepLinks();
 refreshButtons();
@@ -83,10 +96,19 @@ async function joinRoom(): Promise<void> {
     });
 
     socket.on("signal:joined", async (payload: { peers: SignalPeer[] }) => {
+      presence.clear();
+      presence.upsert({ userId: state.userId, displayName: state.displayName, state: "you" });
       const existingPeers = payload.peers.filter((peer) => peer.userId !== state.userId);
       for (const peer of existingPeers) {
+        state.peerDisplayNames.set(peer.userId, peer.displayName);
+        presence.upsert({
+          userId: peer.userId,
+          displayName: peer.displayName,
+          state: "connected"
+        });
         await ensurePeerConnection(peer.userId, true);
       }
+      renderPresence();
       startHeartbeat();
       setStatus(`Joined ${state.roomId}`);
     });
@@ -95,6 +117,13 @@ async function joinRoom(): Promise<void> {
       if (payload.userId === state.userId) {
         return;
       }
+      state.peerDisplayNames.set(payload.userId, payload.displayName);
+      presence.upsert({
+        userId: payload.userId,
+        displayName: payload.displayName,
+        state: "connected"
+      });
+      renderPresence();
       await ensurePeerConnection(payload.userId, true);
       setStatus(`${payload.displayName} joined`);
     });
@@ -141,6 +170,8 @@ async function joinRoom(): Promise<void> {
       "signal:peer-left",
       (payload: { userId: string; activeScreenSharerUserId: string | null }) => {
         removePeer(payload.userId);
+        presence.remove(payload.userId);
+        renderPresence();
         if (!payload.activeScreenSharerUserId) {
           els.toggleScreen.textContent = "Share screen";
         }
@@ -242,6 +273,7 @@ function removePeer(userId: string): void {
     state.peers.delete(userId);
   }
   state.remoteStreams.delete(userId);
+  state.peerDisplayNames.delete(userId);
   const tile = document.getElementById(`remote-${userId}`);
   if (tile) {
     tile.remove();
@@ -256,7 +288,8 @@ function renderRemoteStream(userId: string, stream: MediaStream): void {
     tile = document.createElement("article");
     tile.id = `remote-${userId}`;
     tile.className = "tile";
-    tile.innerHTML = `<h2>${userId}</h2><video autoplay playsinline></video>`;
+    const label = state.peerDisplayNames.get(userId) ?? userId;
+    tile.innerHTML = `<h2>${label}</h2><video autoplay playsinline></video>`;
     els.remoteVideos.appendChild(tile);
     video = tile.querySelector("video");
   }
@@ -281,6 +314,9 @@ function leaveRoom(): void {
   }
   state.localStream = null;
   state.screenStream = null;
+  state.peerDisplayNames.clear();
+  presence.clear();
+  renderPresence();
   els.localVideo.srcObject = null;
   els.remoteVideos.innerHTML = "";
   setStatus("Left room");
@@ -408,4 +444,33 @@ async function wireDeepLinks(): Promise<void> {
     els.roomId.value = roomId;
     setStatus(`Deep link loaded room ${roomId}`);
   });
+}
+
+function renderPresence(): void {
+  const users = presence.snapshot();
+  els.presenceList.innerHTML = "";
+  for (const user of users) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${escapeHtml(user.displayName)}</span><span class="state">${user.state}</span>`;
+    els.presenceList.appendChild(li);
+  }
+}
+
+async function switchRoom(roomId: string): Promise<void> {
+  els.roomId.value = roomId;
+  if (!state.socket) {
+    setStatus(`Selected room ${roomId}`);
+    return;
+  }
+  leaveRoom();
+  await joinRoom();
+}
+
+function escapeHtml(input: string): string {
+  return input
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
