@@ -8,6 +8,8 @@
 import { Router } from "express";
 import type { RoomStateStore } from "../services/roomState";
 import type { Server as SocketIOServer } from "socket.io";
+import fs from "fs";
+import path from "path";
 
 export interface DebugContext {
   roomStateStore: RoomStateStore;
@@ -16,6 +18,12 @@ export interface DebugContext {
 
 export function createDebugRouter(context: DebugContext): Router {
   const router = Router();
+
+  // Ensure logs directory exists
+  const logsDir = path.join(process.cwd(), "logs");
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
 
   // Get all rooms
   router.get("/rooms", (_req, res) => {
@@ -126,6 +134,38 @@ export function createDebugRouter(context: DebugContext): Router {
 
     socket.disconnect(true);
     res.json({ success: true, socketId });
+  });
+
+  // Remote logging endpoint
+  router.post("/log", (req, res) => {
+    const { logs } = req.body;
+
+    if (!logs || !Array.isArray(logs)) {
+      res.status(400).json({ error: "Expected { logs: LogMessage[] }" });
+      return;
+    }
+
+    try {
+      for (const log of logs) {
+        const { source, level, message, timestamp, data } = log;
+
+        if (!source || !level || !message) {
+          continue; // Skip invalid logs
+        }
+
+        const logFile = path.join(logsDir, `${source}.log`);
+        const logLine = `[${timestamp || new Date().toISOString()}] [${level.toUpperCase()}] ${message}${
+          data ? ` ${JSON.stringify(data)}` : ""
+        }\n`;
+
+        fs.appendFileSync(logFile, logLine);
+      }
+
+      res.json({ success: true, count: logs.length });
+    } catch (error) {
+      console.error("Failed to write logs:", error);
+      res.status(500).json({ error: "Failed to write logs" });
+    }
   });
 
   return router;

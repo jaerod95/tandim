@@ -1,7 +1,7 @@
 export type SignalPeer = { userId: string; displayName: string };
 export type IceConfig = { iceServers: RTCIceServer[] };
 export type PresenceEntry = { userId: string; displayName: string; state: "you" | "connected" };
-export type RemoteTile = { userId: string; displayName: string; stream: MediaStream };
+export type RemoteTile = { userId: string; displayName: string; stream: MediaStream; version: number };
 export type CallSession = {
   apiUrl: string;
   workspaceId: string;

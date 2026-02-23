@@ -8,7 +8,14 @@
       "Bash(pnpm build:*)",
       "Bash(pnpm add:*)",
       "Bash(pnpm run lint)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(pnpm run smoke:desktop:*)",
+      "Bash(cat:*)",
+      "Bash(open:*)",
+      "Bash(pkill:*)",
+      "Bash(/Users/jrod/Documents/personal/tandim/app/test-simple.html:*)",
+      "Bash(chmod:*)",
+      "Bash(wc:*)"
     ]
   }
 }

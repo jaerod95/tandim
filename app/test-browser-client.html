@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tandim Test Client</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #1a1a1a;
+      color: #e8e8e8;
+      padding: 20px;
+      margin: 0;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #5865f2;
+    }
+    .controls {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .controls label {
+      display: block;
+      margin: 10px 0;
+    }
+    .controls input {
+      background: #1a1a1a;
+      border: 1px solid #3d3d3d;
+      color: #e8e8e8;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-left: 10px;
+      width: 200px;
+    }
+    button {
+      margin: 10px 5px;
+      padding: 10px 20px;
+      background: #5865f2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:hover {
+      background: #4752c4;
+    }
+    button.danger {
+      background: #c73f3f;
+    }
+    button.danger:hover {
+      background: #a83333;
+    }
+    button.active {
+      background: #c73f3f;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .status {
+      margin: 10px 0;
+      padding: 12px;
+      background: #2a2a2a;
+      border-radius: 4px;
+      border-left: 3px solid #5865f2;
+    }
+    .videos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .video-container {
+      background: #2a2a2a;
+      border: 1px solid #3d3d3d;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .video-container h3 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #d4d4d4;
+    }
+    video {
+      width: 100%;
+      background: #000;
+      border-radius: 6px;
+      min-height: 180px;
+    }
+    .mirror {
+      transform: scaleX(-1);
+    }
+    .log {
+      background: #1e1e1e;
+      border: 1px solid #2d2d2d;
+      border-radius: 4px;
+      padding: 12px;
+      margin-top: 20px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      color: #7fce8f;
+    }
+    .log div {
+      margin: 2px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎥 Tandim Browser Test Client</h1>
+
+    <div class="controls">
+      <label>
+        Display Name:
+        <input id="displayName" value="Browser User" />
+      </label>
+      <label>
+        Room:
+        <input id="room" value="Team Standup" />
+      </label>
+      <div style="margin-top: 15px;">
+        <button onclick="join()" id="joinBtn">Join Room</button>
+        <button onclick="leave()" id="leaveBtn" disabled>Leave</button>
+        <button onclick="toggleMic()" id="micBtn" disabled>Mute</button>
+        <button onclick="toggleCamera()" id="camBtn" disabled>Camera On</button>
+      </div>
+    </div>
+
+    <div class="status" id="status">Ready to join. Make sure the API server is running on localhost:3000</div>
+
+    <div class="videos">
+      <div class="video-container">
+        <h3>You (Local)</h3>
+        <video id="localVideo" autoplay muted playsinline class="mirror"></video>
+      </div>
+      <div id="remoteVideos"></div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script>
+    const API_URL = 'http://localhost:3000';
+    let socket = null;
+    let localStream = null;
+    let peerConnections = new Map();
+    let pendingIceCandidates = new Map();
+    let micEnabled = true;
+    let cameraEnabled = false;
+    let userId = null;
+    let currentRoom = null;
+
+    // Remote logging setup
+    const originalConsole = {
+      log: console.log,
+      error: console.error,
+      warn: console.warn,
+      info: console.info
+    };
+
+    let logQueue = [];
+    let flushTimer = null;
+
+    function sendLogsToServer() {
+      if (logQueue.length === 0) return;
+
+      const logsToSend = [...logQueue];
+      logQueue = [];
+
+      fetch(`${API_URL}/api/debug/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logs: logsToSend }),
+      }).catch(() => {
+        // Silently fail
+      });
+    }
+
+    function remoteLog(level, args) {
+      const message = Array.from(args).map(arg => {
+        if (typeof arg === 'string') return arg;
+        if (typeof arg === 'object') {
+          try {
+            return JSON.stringify(arg);
+          } catch {
+            return String(arg);
+          }
+        }
+        return String(arg);
+      }).join(' ');
+
+      logQueue.push({
+        source: 'browser',
+        level: level,
+        message: message,
+        timestamp: new Date().toISOString()
+      });
+
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = setTimeout(sendLogsToServer, 100);
+    }
+
+    // Override console methods
+    console.log = function(...args) {
+      originalConsole.log.apply(console, args);
+      remoteLog('log', args);
+    };
+
+    console.error = function(...args) {
+      originalConsole.error.apply(console, args);
+      remoteLog('error', args);
+    };
+
+    console.warn = function(...args) {
+      originalConsole.warn.apply(console, args);
+      remoteLog('warn', args);
+    };
+
+    console.info = function(...args) {
+      originalConsole.info.apply(console, args);
+      remoteLog('info', args);
+    };
+
+    originalConsole.log('🔌 Remote logging enabled for Browser');
+
+    // Fix codec collision by preferring VP8
+    function filterCodecs(sdp) {
+      const lines = sdp.split('\r\n');
+      const videoMediaIndex = lines.findIndex(line => line.startsWith('m=video'));
+
+      if (videoMediaIndex === -1) return sdp;
+
+      // Find VP8 payload type
+      const rtpmapLines = lines.filter(line => line.includes('rtpmap') && line.includes('VP8'));
+      if (rtpmapLines.length === 0) return sdp;
+
+      const vp8Match = rtpmapLines[0].match(/a=rtpmap:(\d+)/);
+      if (!vp8Match) return sdp;
+
+      const vp8PayloadType = vp8Match[1];
+      log(`Filtering SDP to prefer VP8 (payload type ${vp8PayloadType})`);
+
+      // Reconstruct m=video line with only VP8 and its related codecs
+      const mLineMatch = lines[videoMediaIndex].match(/^m=video (\d+) ([^ ]+) (.*)$/);
+      if (!mLineMatch) return sdp;
+
+      const [, port, proto, payloads] = mLineMatch;
+
+      // Keep VP8 and RTX for VP8
+      const keptPayloads = [vp8PayloadType];
+
+      // Find RTX for VP8
+      for (const line of lines) {
+        const rtxMatch = line.match(/a=fmtp:(\d+) apt=(\d+)/);
+        if (rtxMatch && rtxMatch[2] === vp8PayloadType) {
+          keptPayloads.push(rtxMatch[1]);
+        }
+      }
+
+      lines[videoMediaIndex] = `m=video ${port} ${proto} ${keptPayloads.join(' ')}`;
+
+      // Remove codec lines we're not using
+      const filteredLines = lines.filter((line, index) => {
+        if (index === videoMediaIndex) return true;
+        if (!line.startsWith('a=rtpmap:') && !line.startsWith('a=fmtp:') && !line.startsWith('a=rtcp-fb:')) {
+          return true;
+        }
+
+        const payloadMatch = line.match(/^a=(?:rtpmap|fmtp|rtcp-fb):(\d+)/);
+        if (!payloadMatch) return true;
+
+        return keptPayloads.includes(payloadMatch[1]);
+      });
+
+      return filteredLines.join('\r\n');
+    }
+
+    function log(msg, type = 'info') {
+      const logDiv = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      if (type === 'error') entry.style.color = '#ff6b6b';
+      if (type === 'success') entry.style.color = '#7fce8f';
+      logDiv.appendChild(entry);
+      logDiv.scrollTop = logDiv.scrollHeight;
+      console.log(msg);
+    }
+
+    function updateStatus(msg, type = 'info') {
+      const statusDiv = document.getElementById('status');
+      statusDiv.textContent = msg;
+      if (type === 'error') statusDiv.style.borderLeftColor = '#ff6b6b';
+      else if (type === 'success') statusDiv.style.borderLeftColor = '#7fce8f';
+      else statusDiv.style.borderLeftColor = '#5865f2';
+      log(msg, type);
+    }
+
+    async function drainIceCandidates(peerUserId) {
+      const pc = peerConnections.get(peerUserId);
+      const queue = pendingIceCandidates.get(peerUserId);
+
+      if (!pc || !queue || queue.length === 0) return;
+
+      log(`Draining ${queue.length} buffered ICE candidates`);
+
+      for (const candidate of queue) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+          log(`Failed to add buffered ICE candidate: ${error.message}`, 'error');
+        }
+      }
+
+      pendingIceCandidates.delete(peerUserId);
+    }
+
+    async function join() {
+      try {
+        const displayName = document.getElementById('displayName').value;
+        currentRoom = document.getElementById('room').value;
+        userId = 'browser-' + Math.random().toString(36).slice(2, 8);
+
+        updateStatus('Getting microphone...');
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        document.getElementById('localVideo').srcObject = localStream;
+        log('✓ Got microphone access', 'success');
+
+        updateStatus('Connecting to server...');
+        socket = io(API_URL, {
+          path: '/api/signal',
+          transports: ['websocket']
+        });
+
+        socket.on('connect', () => {
+          log('✓ Connected to server', 'success');
+          updateStatus('Joining room...', 'success');
+          socket.emit('signal:join', {
+            workspaceId: 'team-local',
+            roomId: currentRoom,
+            userId: userId,
+            displayName: displayName
+          });
+        });
+
+        socket.on('signal:joined', async (data) => {
+          log(`✓ Joined room "${currentRoom}" with ${data.peers.length - 1} other peer(s)`, 'success');
+          updateStatus(`In room: ${currentRoom} (${data.peers.length} total)`, 'success');
+
+          // Enable controls
+          document.getElementById('joinBtn').disabled = true;
+          document.getElementById('leaveBtn').disabled = false;
+          document.getElementById('micBtn').disabled = false;
+          document.getElementById('camBtn').disabled = false;
+
+          // Create connections for existing peers
+          for (const peer of data.peers) {
+            if (peer.userId !== userId) {
+              log(`Creating connection to ${peer.displayName}...`);
+              await createPeerConnection(peer.userId, peer.displayName, false);
+            }
+          }
+        });
+
+        socket.on('signal:peer-joined', async (peer) => {
+          log(`${peer.displayName} joined the room`, 'success');
+          updateStatus(`${peer.displayName} joined`);
+          await createPeerConnection(peer.userId, peer.displayName, true);
+        });
+
+        socket.on('signal:offer', async (data) => {
+          const hasVideo = data.payload.sdp?.includes('m=video');
+          const hasAudio = data.payload.sdp?.includes('m=audio');
+          log(`Received offer from peer: audio=${hasAudio}, video=${hasVideo}`);
+          const pc = await createPeerConnection(data.fromUserId, 'Peer', false);
+          await pc.setRemoteDescription(new RTCSessionDescription(data.payload));
+          await drainIceCandidates(data.fromUserId);
+
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          const answerHasVideo = answer.sdp?.includes('m=video');
+          const answerHasAudio = answer.sdp?.includes('m=audio');
+          log(`Sending answer to peer: audio=${answerHasAudio}, video=${answerHasVideo}`);
+
+          socket.emit('signal:answer', {
+            workspaceId: 'team-local',
+            roomId: currentRoom,
+            toUserId: data.fromUserId,
+            payload: answer
+          });
+        });
+
+        socket.on('signal:answer', async (data) => {
+          const hasVideo = data.payload.sdp?.includes('m=video');
+          const hasAudio = data.payload.sdp?.includes('m=audio');
+          log(`Received answer from peer: audio=${hasAudio}, video=${hasVideo}`);
+          const pc = peerConnections.get(data.fromUserId);
+          if (pc) {
+            await pc.setRemoteDescription(new RTCSessionDescription(data.payload));
+            await drainIceCandidates(data.fromUserId);
+          }
+        });
+
+        socket.on('signal:ice-candidate', async (data) => {
+          const pc = peerConnections.get(data.fromUserId);
+          if (!pc || !data.payload) return;
+
+          try {
+            // Only add if remote description is set
+            if (pc.remoteDescription) {
+              await pc.addIceCandidate(new RTCIceCandidate(data.payload));
+            } else {
+              // Buffer candidates until remote description is set
+              const queue = pendingIceCandidates.get(data.fromUserId) || [];
+              queue.push(data.payload);
+              pendingIceCandidates.set(data.fromUserId, queue);
+              log(`Buffered ICE candidate (${queue.length} pending)`);
+            }
+          } catch (error) {
+            log(`Failed to add ICE candidate: ${error.message}`, 'error');
+          }
+        });
+
+        socket.on('signal:peer-left', (data) => {
+          log(`Peer left: ${data.userId}`, 'info');
+          const pc = peerConnections.get(data.userId);
+          if (pc) {
+            pc.close();
+            peerConnections.delete(data.userId);
+          }
+          pendingIceCandidates.delete(data.userId);
+          const container = document.getElementById('video-container-' + data.userId);
+          if (container) container.remove();
+        });
+
+        socket.on('disconnect', () => {
+          log('Disconnected from server', 'error');
+          updateStatus('Disconnected', 'error');
+        });
+
+        socket.on('signal:error', (error) => {
+          log(`Error: ${error.message}`, 'error');
+          updateStatus(`Error: ${error.message}`, 'error');
+        });
+
+      } catch (error) {
+        log(`Failed to join: ${error.message}`, 'error');
+        updateStatus(`Error: ${error.message}`, 'error');
+      }
+    }
+
+    async function createPeerConnection(peerUserId, displayName, createOffer) {
+      try {
+        const iceResponse = await fetch(API_URL + '/api/ice-config');
+        const iceConfig = await iceResponse.json();
+
+        // Add explicit codec preferences
+        const config = {
+          ...iceConfig,
+          sdpSemantics: 'unified-plan'
+        };
+
+        const pc = new RTCPeerConnection(config);
+        peerConnections.set(peerUserId, pc);
+
+        // Set codec preferences to avoid collision
+        if (typeof pc.getTransceivers === 'function') {
+          const transceivers = pc.getTransceivers();
+          transceivers.forEach(transceiver => {
+            if (transceiver.sender && transceiver.sender.track?.kind === 'video') {
+              const capabilities = RTCRtpSender.getCapabilities('video');
+              if (capabilities) {
+                // Prefer VP8 codec
+                const vp8Codec = capabilities.codecs.find(codec =>
+                  codec.mimeType === 'video/VP8'
+                );
+                if (vp8Codec) {
+                  transceiver.setCodecPreferences([vp8Codec]);
+                  log(`Set codec preference to VP8 for ${displayName}`);
+                }
+              }
+            }
+          });
+        }
+
+        // Add local tracks
+        if (localStream) {
+          for (const track of localStream.getTracks()) {
+            pc.addTrack(track, localStream);
+          }
+        }
+
+        // Handle incoming tracks
+        pc.ontrack = (event) => {
+          log(`Receiving ${event.track.kind} track from ${displayName}`);
+          let container = document.getElementById('video-container-' + peerUserId);
+          let videoEl = document.getElementById('video-' + peerUserId);
+
+          if (!container) {
+            container = document.createElement('div');
+            container.id = 'video-container-' + peerUserId;
+            container.className = 'video-container';
+
+            const label = document.createElement('h3');
+            label.textContent = displayName;
+
+            videoEl = document.createElement('video');
+            videoEl.id = 'video-' + peerUserId;
+            videoEl.autoplay = true;
+            videoEl.playsInline = true;
+
+            container.appendChild(label);
+            container.appendChild(videoEl);
+            document.getElementById('remoteVideos').appendChild(container);
+          }
+
+          if (videoEl) {
+            videoEl.srcObject = event.streams[0];
+          }
+        };
+
+        // Handle ICE candidates
+        pc.onicecandidate = (event) => {
+          if (event.candidate && socket) {
+            socket.emit('signal:ice-candidate', {
+              workspaceId: 'team-local',
+              roomId: currentRoom,
+              toUserId: peerUserId,
+              payload: event.candidate.toJSON()
+            });
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          log(`ICE state with ${displayName}: ${pc.iceConnectionState}`);
+        };
+
+        // Handle automatic renegotiation when tracks change
+        let makingOffer = false;
+        pc.onnegotiationneeded = async () => {
+          try {
+            if (makingOffer) {
+              log(`Already making offer to ${displayName}`);
+              return;
+            }
+            makingOffer = true;
+            log(`🔄 Negotiation needed with ${displayName}`);
+
+            let offer = await pc.createOffer();
+            if (pc.signalingState !== 'stable') {
+              log(`Signaling state not stable: ${pc.signalingState}`);
+              return;
+            }
+
+            // Filter SDP to avoid codec collisions
+            if (offer.sdp) {
+              offer = new RTCSessionDescription({
+                type: offer.type,
+                sdp: filterCodecs(offer.sdp)
+              });
+            }
+
+            await pc.setLocalDescription(offer);
+            const hasVideo = offer.sdp?.includes('m=video');
+            const hasAudio = offer.sdp?.includes('m=audio');
+            log(`📤 Auto-negotiating with ${displayName}: audio=${hasAudio}, video=${hasVideo}`);
+
+            socket.emit('signal:offer', {
+              workspaceId: 'team-local',
+              roomId: currentRoom,
+              toUserId: peerUserId,
+              payload: offer
+            });
+          } catch (err) {
+            log(`Negotiation error: ${err.message}`, 'error');
+          } finally {
+            makingOffer = false;
+          }
+        };
+
+        // Create initial offer if needed
+        if (createOffer) {
+          let offer = await pc.createOffer();
+
+          // Filter SDP to avoid codec collisions
+          if (offer.sdp) {
+            offer = new RTCSessionDescription({
+              type: offer.type,
+              sdp: filterCodecs(offer.sdp)
+            });
+          }
+
+          await pc.setLocalDescription(offer);
+          const hasVideo = offer.sdp?.includes('m=video');
+          const hasAudio = offer.sdp?.includes('m=audio');
+          log(`📤 Initial offer to ${displayName}: audio=${hasAudio}, video=${hasVideo}`);
+          socket.emit('signal:offer', {
+            workspaceId: 'team-local',
+            roomId: currentRoom,
+            toUserId: peerUserId,
+            payload: offer
+          });
+        }
+
+        return pc;
+      } catch (error) {
+        log(`Error creating peer connection: ${error.message}`, 'error');
+        throw error;
+      }
+    }
+
+    function toggleMic() {
+      if (!localStream) return;
+      micEnabled = !micEnabled;
+      for (const track of localStream.getAudioTracks()) {
+        track.enabled = micEnabled;
+      }
+      const btn = document.getElementById('micBtn');
+      btn.textContent = micEnabled ? 'Mute' : 'Unmute';
+      btn.className = micEnabled ? '' : 'active';
+      log(micEnabled ? 'Microphone enabled' : 'Microphone muted');
+      updateStatus(micEnabled ? 'Mic enabled' : 'Mic muted');
+    }
+
+    async function toggleCamera() {
+      if (!localStream) return;
+
+      try {
+        if (cameraEnabled) {
+          for (const track of localStream.getVideoTracks()) {
+            track.stop();
+            localStream.removeTrack(track);
+          }
+          cameraEnabled = false;
+          document.getElementById('camBtn').textContent = 'Camera On';
+          log('Camera disabled');
+          updateStatus('Camera off');
+        } else {
+          const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          const track = videoStream.getVideoTracks()[0];
+          localStream.addTrack(track);
+          document.getElementById('localVideo').srcObject = localStream;
+          cameraEnabled = true;
+          document.getElementById('camBtn').textContent = 'Camera Off';
+          log('Camera enabled', 'success');
+          updateStatus('Camera on', 'success');
+        }
+
+        // Update tracks on existing connections instead of recreating them
+        await updateTracksForAllPeers();
+      } catch (error) {
+        log(`Camera error: ${error.message}`, 'error');
+        updateStatus(`Camera error: ${error.message}`, 'error');
+      }
+    }
+
+    async function updateTracksForAllPeers() {
+      log('Updating camera tracks for all peers...');
+
+      for (const [peerUserId, pc] of peerConnections) {
+        if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+          log(`Skipping peer ${peerUserId}, connection state: ${pc.connectionState}`);
+          continue;
+        }
+
+        try {
+          const senders = pc.getSenders();
+          const videoTracks = localStream?.getVideoTracks() ?? [];
+          const hasVideoInStream = videoTracks.length > 0;
+
+          log(`Peer ${peerUserId}: stream has ${videoTracks.length} video tracks`);
+
+          // Find existing video sender
+          const videoSender = senders.find(s => s.track?.kind === 'video');
+
+          if (hasVideoInStream && !videoSender) {
+            // Add video track (onnegotiationneeded will fire automatically)
+            const track = videoTracks[0];
+            log(`➕ Adding video track to peer ${peerUserId}: ${track.id}, enabled: ${track.enabled}`);
+            pc.addTrack(track, localStream);
+          } else if (!hasVideoInStream && videoSender) {
+            // Remove video track (onnegotiationneeded will fire automatically)
+            log(`➖ Removing video track from peer ${peerUserId}`);
+            pc.removeTrack(videoSender);
+          } else if (hasVideoInStream && videoSender) {
+            // Replace track without renegotiation
+            const track = videoTracks[0];
+            log(`🔄 Replacing video track for peer ${peerUserId}: ${track.id}`);
+            await videoSender.replaceTrack(track);
+          } else {
+            log(`No video changes needed for peer ${peerUserId}`);
+          }
+        } catch (error) {
+          log(`Failed to update tracks: ${error.message}`, 'error');
+        }
+      }
+    }
+
+    function leave() {
+      if (socket) {
+        socket.disconnect();
+      }
+      if (localStream) {
+        for (const track of localStream.getTracks()) {
+          track.stop();
+        }
+      }
+      for (const pc of peerConnections.values()) {
+        pc.close();
+      }
+      peerConnections.clear();
+      pendingIceCandidates.clear();
+
+      document.getElementById('remoteVideos').innerHTML = '';
+      document.getElementById('localVideo').srcObject = null;
+
+      document.getElementById('joinBtn').disabled = false;
+      document.getElementById('leaveBtn').disabled = true;
+      document.getElementById('micBtn').disabled = true;
+      document.getElementById('camBtn').disabled = true;
+
+      log('Left the room', 'info');
+      updateStatus('Disconnected');
+    }
+
+    window.addEventListener('beforeunload', leave);
+  </script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Simple Test Client</title>
+  <style>
+    body { background: #1a1a1a; color: #fff; font-family: sans-serif; padding: 20px; }
+    button { margin: 5px; padding: 10px 20px; background: #5865f2; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #4752c4; }
+    button.active { background: #c73f3f; }
+    video { width: 320px; background: #000; margin: 10px; }
+    .status { background: #2a2a2a; padding: 10px; margin: 10px 0; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Simple Test Client</h1>
+  <div class="status" id="status">Ready</div>
+  <button onclick="join()">Join</button>
+  <button onclick="toggleCam()">Toggle Camera</button>
+  <div>
+    <h3>Local</h3>
+    <video id="local" autoplay muted playsinline></video>
+  </div>
+  <div id="remotes"></div>
+
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script>
+    let socket, localStream, peers = new Map();
+    let camOn = false;
+
+    async function join() {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      document.getElementById('local').srcObject = localStream;
+
+      socket = io('http://localhost:3000', { path: '/api/signal' });
+      
+      socket.on('connect', () => {
+        socket.emit('signal:join', {
+          workspaceId: 'team-local',
+          roomId: 'Team Standup',
+          userId: 'test-' + Date.now(),
+          displayName: 'Test User'
+        });
+      });
+
+      socket.on('signal:joined', async (data) => {
+        document.getElementById('status').textContent = 'Joined with ' + data.peers.length + ' peers';
+        for (const peer of data.peers) {
+          if (peer.userId !== socket.id) {
+            await createPeer(peer.userId, false);
+          }
+        }
+      });
+
+      socket.on('signal:peer-joined', async (peer) => {
+        document.getElementById('status').textContent = peer.displayName + ' joined';
+        await createPeer(peer.userId, true);
+      });
+
+      socket.on('signal:offer', async (data) => {
+        let pc = peers.get(data.fromUserId);
+        if (!pc) pc = await createPeer(data.fromUserId, false);
+        
+        await pc.setRemoteDescription(data.payload);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('signal:answer', {
+          workspaceId: 'team-local',
+          roomId: 'Team Standup',
+          toUserId: data.fromUserId,
+          payload: answer
+        });
+      });
+
+      socket.on('signal:answer', async (data) => {
+        const pc = peers.get(data.fromUserId);
+        if (pc) await pc.setRemoteDescription(data.payload);
+      });
+
+      socket.on('signal:ice-candidate', async (data) => {
+        const pc = peers.get(data.fromUserId);
+        if (pc && data.payload) await pc.addIceCandidate(data.payload);
+      });
+    }
+
+    async function createPeer(userId, offer) {
+      const res = await fetch('http://localhost:3000/api/ice-config');
+      const ice = await res.json();
+      const pc = new RTCPeerConnection(ice);
+      peers.set(userId, pc);
+
+      for (const track of localStream.getTracks()) {
+        pc.addTrack(track, localStream);
+      }
+
+      pc.ontrack = (e) => {
+        let video = document.getElementById('vid-' + userId);
+        if (!video) {
+          video = document.createElement('video');
+          video.id = 'vid-' + userId;
+          video.autoplay = true;
+          video.playsInline = true;
+          document.getElementById('remotes').appendChild(video);
+        }
+        video.srcObject = e.streams[0];
+      };
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          socket.emit('signal:ice-candidate', {
+            workspaceId: 'team-local',
+            roomId: 'Team Standup',
+            toUserId: userId,
+            payload: e.candidate
+          });
+        }
+      };
+
+      if (offer) {
+        const o = await pc.createOffer();
+        await pc.setLocalDescription(o);
+        socket.emit('signal:offer', {
+          workspaceId: 'team-local',
+          roomId: 'Team Standup',
+          toUserId: userId,
+          payload: o
+        });
+      }
+
+      return pc;
+    }
+
+    async function toggleCam() {
+      if (camOn) {
+        localStream.getVideoTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });
+        camOn = false;
+      } else {
+        const cam = await navigator.mediaDevices.getUserMedia({ video: true });
+        localStream.addTrack(cam.getVideoTracks()[0]);
+        document.getElementById('local').srcObject = localStream;
+        camOn = true;
+
+        // Update existing peers
+        for (const [uid, pc] of peers) {
+          for (const sender of pc.getSenders()) {
+            if (sender.track?.kind === 'video') pc.removeTrack(sender);
+          }
+          pc.addTrack(cam.getVideoTracks()[0], localStream);
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('signal:offer', {
+            workspaceId: 'team-local',
+            roomId: 'Team Standup',
+            toUserId: uid,
+            payload: offer
+          });
+        }
+      }
+    }
+  </script>
+</body>
+</html>
