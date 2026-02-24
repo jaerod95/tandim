@@ -5,14 +5,18 @@ import {
   setPeerMedia,
   startScreenShare,
   stopScreenShare,
-  upsertPeer
+  upsertPeer,
 } from "../src/webrtc/meshState";
 
 describe("mesh room state", () => {
   it("tracks room membership and cleanup", () => {
     const state = createMeshRoomState("ws1", "room1", "u1");
     upsertPeer(state, { userId: "u1", audioEnabled: true, videoEnabled: true });
-    upsertPeer(state, { userId: "u2", audioEnabled: true, videoEnabled: false });
+    upsertPeer(state, {
+      userId: "u2",
+      audioEnabled: true,
+      videoEnabled: false,
+    });
     expect(Array.from(state.peers.keys()).sort()).toEqual(["u1", "u2"]);
 
     removePeer(state, "u2");
@@ -21,7 +25,11 @@ describe("mesh room state", () => {
 
   it("updates peer video state", () => {
     const state = createMeshRoomState("ws1", "room1", "u1");
-    upsertPeer(state, { userId: "u2", audioEnabled: true, videoEnabled: false });
+    upsertPeer(state, {
+      userId: "u2",
+      audioEnabled: true,
+      videoEnabled: false,
+    });
     setPeerMedia(state, "u2", { videoEnabled: true });
     expect(state.peers.get("u2")?.videoEnabled).toBe(true);
   });

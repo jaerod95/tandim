@@ -2,12 +2,12 @@
  * Remote Logger - Sends console logs to API server for debugging
  */
 
-const API_URL = 'http://localhost:3000';
-const SOURCE = 'electron';
+const API_URL = "http://localhost:3000";
+const SOURCE = "electron";
 
 interface LogMessage {
   source: string;
-  level: 'log' | 'error' | 'warn' | 'info';
+  level: "log" | "error" | "warn" | "info";
   message: string;
   timestamp: string;
   data?: any;
@@ -41,10 +41,10 @@ function sendLog(log: LogMessage) {
 
     // Send in background, don't wait
     fetch(`${API_URL}/api/debug/log`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ logs: logsToSend }),
-      mode: 'cors',
+      mode: "cors",
     }).catch(() => {
       // Silently fail - don't want logging to break the app
     });
@@ -53,13 +53,13 @@ function sendLog(log: LogMessage) {
 
 function formatArgs(args: any[]): { message: string; data?: any } {
   if (args.length === 0) {
-    return { message: '' };
+    return { message: "" };
   }
 
   const message = args
-    .map(arg => {
-      if (typeof arg === 'string') return arg;
-      if (typeof arg === 'object') {
+    .map((arg) => {
+      if (typeof arg === "string") return arg;
+      if (typeof arg === "object") {
         try {
           return JSON.stringify(arg);
         } catch {
@@ -68,7 +68,7 @@ function formatArgs(args: any[]): { message: string; data?: any } {
       }
       return String(arg);
     })
-    .join(' ');
+    .join(" ");
 
   const data = args.length > 1 ? args.slice(1) : undefined;
 
@@ -76,55 +76,55 @@ function formatArgs(args: any[]): { message: string; data?: any } {
 }
 
 export function enableRemoteLogging() {
-  console.log = function(...args: any[]) {
+  console.log = function (...args: any[]) {
     originalConsole.log.apply(console, args);
     const { message, data } = formatArgs(args);
     sendLog({
       source: SOURCE,
-      level: 'log',
+      level: "log",
       message,
       timestamp: new Date().toISOString(),
       data,
     });
   };
 
-  console.error = function(...args: any[]) {
+  console.error = function (...args: any[]) {
     originalConsole.error.apply(console, args);
     const { message, data } = formatArgs(args);
     sendLog({
       source: SOURCE,
-      level: 'error',
+      level: "error",
       message,
       timestamp: new Date().toISOString(),
       data,
     });
   };
 
-  console.warn = function(...args: any[]) {
+  console.warn = function (...args: any[]) {
     originalConsole.warn.apply(console, args);
     const { message, data } = formatArgs(args);
     sendLog({
       source: SOURCE,
-      level: 'warn',
+      level: "warn",
       message,
       timestamp: new Date().toISOString(),
       data,
     });
   };
 
-  console.info = function(...args: any[]) {
+  console.info = function (...args: any[]) {
     originalConsole.info.apply(console, args);
     const { message, data } = formatArgs(args);
     sendLog({
       source: SOURCE,
-      level: 'info',
+      level: "info",
       message,
       timestamp: new Date().toISOString(),
       data,
     });
   };
 
-  originalConsole.log('🔌 Remote logging enabled for Electron');
+  originalConsole.log("🔌 Remote logging enabled for Electron");
 }
 
 export function disableRemoteLogging() {

@@ -15,14 +15,14 @@ export type MeshRoomState = {
 export function createMeshRoomState(
   workspaceId: string,
   roomId: string,
-  localUserId: string
+  localUserId: string,
 ): MeshRoomState {
   return {
     workspaceId,
     roomId,
     localUserId,
     peers: new Map<string, PeerMediaState>(),
-    activeScreenSharerUserId: null
+    activeScreenSharerUserId: null,
   };
 }
 
@@ -40,7 +40,7 @@ export function removePeer(state: MeshRoomState, userId: string): void {
 export function setPeerMedia(
   state: MeshRoomState,
   userId: string,
-  updates: Partial<Pick<PeerMediaState, "audioEnabled" | "videoEnabled">>
+  updates: Partial<Pick<PeerMediaState, "audioEnabled" | "videoEnabled">>,
 ): void {
   const peer = state.peers.get(userId);
   if (!peer) {
@@ -49,12 +49,18 @@ export function setPeerMedia(
 
   state.peers.set(userId, {
     ...peer,
-    ...updates
+    ...updates,
   });
 }
 
-export function startScreenShare(state: MeshRoomState, userId: string): { ok: true } | { ok: false } {
-  if (state.activeScreenSharerUserId && state.activeScreenSharerUserId !== userId) {
+export function startScreenShare(
+  state: MeshRoomState,
+  userId: string,
+): { ok: true } | { ok: false } {
+  if (
+    state.activeScreenSharerUserId &&
+    state.activeScreenSharerUserId !== userId
+  ) {
     return { ok: false };
   }
   state.activeScreenSharerUserId = userId;

@@ -6,18 +6,12 @@
  */
 
 import { Router } from "express";
-import type { RoomStateStore } from "../services/roomState";
-import type { Server as SocketIOServer } from "socket.io";
 import fs from "fs";
 import path from "path";
 
-export interface DebugContext {
-  roomStateStore: RoomStateStore;
-  io: SocketIOServer;
-}
 
-export function createDebugRouter(context: DebugContext): Router {
-  const router = Router();
+const router = Router();
+
 
   // Ensure logs directory exists
   const logsDir = path.join(process.cwd(), "logs");
@@ -168,5 +162,4 @@ export function createDebugRouter(context: DebugContext): Router {
     }
   });
 
-  return router;
-}
+export default router;

@@ -8,9 +8,13 @@ type TandimBridge = {
     displayName: string;
     userId: string;
   }) => Promise<{ sessionId: string }>;
-  getCallSession: (
-    sessionId: string
-  ) => Promise<{ apiUrl: string; workspaceId: string; roomId: string; displayName: string; userId: string } | null>;
+  getCallSession: (sessionId: string) => Promise<{
+    apiUrl: string;
+    workspaceId: string;
+    roomId: string;
+    displayName: string;
+    userId: string;
+  } | null>;
 };
 
 declare global {

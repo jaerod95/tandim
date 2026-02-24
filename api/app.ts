@@ -3,15 +3,10 @@ import cookieParser from "cookie-parser";
 import logger from "morgan";
 
 import apiRouter from "./routes/api";
-import type { DebugContext } from "./routes/debug";
+import debugRouter from "./routes/debug";
+import slackRouter from "./routes/slack";
 
 const app = express();
-
-// Store context for debug routes (will be set by server initialization)
-export let debugContext: DebugContext | null = null;
-export function setDebugContext(context: DebugContext): void {
-  debugContext = context;
-}
 
 app.use(logger("dev"));
 app.use((req, res, next) => {
@@ -42,24 +37,10 @@ app.use(
 app.use(cookieParser());
 
 app.use("/api", apiRouter);
+app.use('/api/debug', debugRouter);
+app.use('/api/slack', slackRouter);
 
-// Debug routes (lazy-loaded to ensure context is available)
-app.use("/api/debug", (req, res, next) => {
-  if (!debugContext) {
-    res.status(503).json({
-      code: "debug_not_available",
-      message: "Debug context not initialized",
-      retryable: true
-    });
-    return;
-  }
-
-  // Lazy-load debug router
-  const { createDebugRouter } = require("./routes/debug");
-  const debugRouter = createDebugRouter(debugContext);
-  debugRouter(req, res, next);
-});
-
+// Error handling
 app.use("/api/*", (_req, res) => {
   res.status(404).json({
     code: "not_found",

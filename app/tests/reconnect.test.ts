@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeReconnectDelayMs, shouldRetryConnection } from "../src/webrtc/reconnect";
+import {
+  computeReconnectDelayMs,
+  shouldRetryConnection,
+} from "../src/webrtc/reconnect";
 
 describe("reconnect backoff", () => {
   it("uses exponential backoff with cap", () => {

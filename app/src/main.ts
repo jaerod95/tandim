@@ -12,7 +12,13 @@ let mainWindow: BrowserWindow | null = null;
 let pendingRoomId: string | null = null;
 const callSessions = new Map<
   string,
-  { apiUrl: string; workspaceId: string; roomId: string; displayName: string; userId: string }
+  {
+    apiUrl: string;
+    workspaceId: string;
+    roomId: string;
+    displayName: string;
+    userId: string;
+  }
 >();
 
 function registerIpcHandlers(): void {
@@ -25,13 +31,19 @@ function registerIpcHandlers(): void {
     "call:openWindow",
     (
       _event,
-      payload: { apiUrl: string; workspaceId: string; roomId: string; displayName: string; userId: string }
+      payload: {
+        apiUrl: string;
+        workspaceId: string;
+        roomId: string;
+        displayName: string;
+        userId: string;
+      },
     ) => {
       const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       callSessions.set(sessionId, payload);
       createCallWindow(sessionId);
       return { sessionId };
-    }
+    },
   );
   ipcMain.handle("call:getSession", (_event, sessionId: string) => {
     return callSessions.get(sessionId) ?? null;
@@ -45,7 +57,7 @@ const createWindow = () => {
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
     },
   });
 
@@ -68,16 +80,21 @@ function createCallWindow(sessionId: string): BrowserWindow {
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
-      nodeIntegration: false
-    }
+      nodeIntegration: false,
+    },
   });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    window.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#call?sessionId=${encodeURIComponent(sessionId)}`);
+    window.loadURL(
+      `${MAIN_WINDOW_VITE_DEV_SERVER_URL}#call?sessionId=${encodeURIComponent(sessionId)}`,
+    );
   } else {
-    window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), {
-      hash: `call?sessionId=${encodeURIComponent(sessionId)}`
-    });
+    window.loadFile(
+      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
+      {
+        hash: `call?sessionId=${encodeURIComponent(sessionId)}`,
+      },
+    );
   }
 
   return window;

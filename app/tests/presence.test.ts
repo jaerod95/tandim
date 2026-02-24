@@ -8,7 +8,11 @@ describe("PresenceState", () => {
     presence.upsert({ userId: "u1", displayName: "You", state: "you" });
     presence.upsert({ userId: "u3", displayName: "Alice", state: "connected" });
 
-    expect(presence.snapshot().map((u) => u.userId)).toEqual(["u1", "u3", "u2"]);
+    expect(presence.snapshot().map((u) => u.userId)).toEqual([
+      "u1",
+      "u3",
+      "u2",
+    ]);
   });
 
   it("removes users cleanly", () => {
@@ -17,6 +21,8 @@ describe("PresenceState", () => {
     presence.upsert({ userId: "u2", displayName: "Peer", state: "connected" });
     presence.remove("u2");
 
-    expect(presence.snapshot()).toEqual([{ userId: "u1", displayName: "You", state: "you" }]);
+    expect(presence.snapshot()).toEqual([
+      { userId: "u1", displayName: "You", state: "you" },
+    ]);
   });
 });

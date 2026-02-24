@@ -6,8 +6,8 @@ describe("turn-fallback", () => {
     expect(
       selectIceMode({
         directConnectionSucceeded: false,
-        relayConnectionSucceeded: true
-      })
+        relayConnectionSucceeded: true,
+      }),
     ).toBe("relay");
   });
 
@@ -15,8 +15,8 @@ describe("turn-fallback", () => {
     expect(
       selectIceMode({
         directConnectionSucceeded: false,
-        relayConnectionSucceeded: false
-      })
+        relayConnectionSucceeded: false,
+      }),
     ).toBe("failed");
   });
 });

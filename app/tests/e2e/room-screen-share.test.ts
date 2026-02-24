@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createMeshRoomState, startScreenShare, stopScreenShare } from "../../src/webrtc/meshState";
+import {
+  createMeshRoomState,
+  startScreenShare,
+  stopScreenShare,
+} from "../../src/webrtc/meshState";
 
 describe("room-screen-share", () => {
   it("allows one active screen sharer with clean stop", () => {
