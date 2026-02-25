@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { CallApp } from "./renderer/CallApp";
 import { LobbyApp } from "./renderer/Lobby/LobbyApp";
-import "./index.css";
+import "./styles/globals.css";
 
 const mount = document.getElementById("root");
 if (!mount) {
