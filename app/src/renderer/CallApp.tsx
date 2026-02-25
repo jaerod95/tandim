@@ -1,21 +1,22 @@
-// import React, { useEffect, useMemo, useRef, useState } from "react";
-// import { io, type Socket } from "socket.io-client";
-// import { RemoteVideo } from "./RemoteVideo";
-// import type {
-//   CallSession,
-//   IceConfig,
-//   PresenceEntry,
-//   SignalPeer,
-//   RemoteTile,
-// } from "./types";
-// import { upsertPresence, upsertRemoteTile } from "./utils";
-// import { enableRemoteLogging } from "./remoteLogger";
-
 import CallStage from "./CallStage";
 import { CallContextProvider } from "./CallContext";
 import styles from "./CallApp.module.css";
 import CallHeader from "./CallHeader";
 import CallFooter from "./CallFooter";
+
+export function CallApp() {
+  // When you enter a call app, we need to establish a connection to the call
+  return (
+    <CallContextProvider>
+      <div className={styles.callShell}>
+        <CallHeader />
+        <CallStage />
+        <CallFooter />
+      </div>
+    </CallContextProvider>
+  );
+}
+
 // // Fix codec collision by preferring VP8
 // function filterCodecs(sdp: string): string {
 //   const lines = sdp.split("\r\n");
@@ -76,19 +77,6 @@ import CallFooter from "./CallFooter";
 
 //   return filteredLines.join("\r\n");
 // }
-
-export function CallApp() {
-  // When you enter a call app, we need to establish a connection to the call
-  return (
-    <CallContextProvider>
-      <div className={styles.callShell}>
-        <CallHeader />
-        <CallStage />
-        <CallFooter />
-      </div>
-    </CallContextProvider>
-  );
-}
 
 //   const [status, setStatus] = useState("Connecting...");
 //   const [presence, setPresence] = useState<PresenceEntry[]>([]);

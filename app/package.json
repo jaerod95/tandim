@@ -47,9 +47,11 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.2.1",
     "electron-squirrel-startup": "^1.0.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "tailwindcss": "^4.2.1"
   }
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import type { CallSession } from "./types";
-import { ROOMS } from "./types";
+import type { CallSession } from "../types";
+import { ROOMS } from "../types";
 
 export function LobbyApp() {
   const [apiUrl, setApiUrl] = useState("http://localhost:3000");
@@ -63,29 +63,6 @@ export function LobbyApp() {
 
   return (
     <main className="tandem-shell">
-      <header className="topbar">
-        <div className="topbar-left">
-          <span className="workspace-name">Personal Team</span>
-          <button className="icon-btn settings-btn" title="Settings">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 10a2 2 0 100-4 2 2 0 000 4z" />
-              <path
-                fillRule="evenodd"
-                d="M8 0a1 1 0 011 1v1.07a6.01 6.01 0 011.5.64l.75-.75a1 1 0 011.42 0l1.41 1.41a1 1 0 010 1.42l-.75.75c.28.46.5.96.64 1.5H15a1 1 0 011 1v2a1 1 0 01-1 1h-1.07c-.14.54-.36 1.04-.64 1.5l.75.75a1 1 0 010 1.42l-1.41 1.41a1 1 0 01-1.42 0l-.75-.75a6.01 6.01 0 01-1.5.64V15a1 1 0 01-1 1H7a1 1 0 01-1-1v-1.07a6.01 6.01 0 01-1.5-.64l-.75.75a1 1 0 01-1.42 0l-1.41-1.41a1 1 0 010-1.42l.75-.75a6.01 6.01 0 01-.64-1.5H1a1 1 0 01-1-1V7a1 1 0 011-1h1.07c.14-.54.36-1.04.64-1.5l-.75-.75a1 1 0 010-1.42L3.37 1.92a1 1 0 011.42 0l.75.75A6.01 6.01 0 017.04 2H7V1a1 1 0 011-1zm0 4a4 4 0 100 8 4 4 0 000-8z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </button>
-        </div>
-        <div className="topbar-right">
-          <img
-            src="https://api.dicebear.com/7.x/avataaars/svg?seed=Jrod"
-            alt="Avatar"
-            className="topbar-avatar"
-          />
-        </div>
-      </header>
-
       <section className={`lobby ${showRoomPanel ? "with-panel" : ""}`}>
         {/* Left Sidebar - Rooms */}
         <aside className="rooms-col">

@@ -12,8 +12,6 @@ import type { CallSession } from "./types";
 
 type CallContextValue = {
   currentCall: CallSession | null;
-  isLoading: boolean;
-  error: string | null;
   setCurrentCall: (next: SetStateAction<CallSession | null>) => void;
   refreshCurrentCall: () => Promise<void>;
 };
@@ -34,47 +32,6 @@ export function CallContextProvider({ children }: PropsWithChildren) {
   const [currentCall, setCurrentCall] = useState<CallSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const refreshCurrentCall = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    const sessionId = getSessionIdFromHash(window.location.hash);
-    if (!sessionId) {
-      setCurrentCall(null);
-      setError("Missing session id");
-      setIsLoading(false);
-      return;
-    }
-
-    const bridge = window.tandem;
-    if (!bridge?.getCallSession) {
-      setCurrentCall(null);
-      setError("Call bridge unavailable");
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const session = await bridge.getCallSession(sessionId);
-      if (!session) {
-        setCurrentCall(null);
-        setError("Call session not found");
-        return;
-      }
-
-      setCurrentCall(session);
-    } catch (loadError) {
-      setCurrentCall(null);
-      setError((loadError as Error).message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshCurrentCall();
-  }, [refreshCurrentCall]);
 
   const value = useMemo<CallContextValue>(
     () => ({

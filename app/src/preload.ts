@@ -27,4 +27,4 @@ const api = {
   } | null> => ipcRenderer.invoke("call:getSession", sessionId),
 };
 
-contextBridge.exposeInMainWorld("tandem", api);
+contextBridge.exposeInMainWorld("tandim", api);

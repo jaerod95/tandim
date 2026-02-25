@@ -1,19 +1,7 @@
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
-  background: #1a1a1a;
-  color: #e8e8e8;
-  -webkit-font-smoothing: antialiased;
-}
+@import "tailwindcss";
 
 /* === LOBBY STYLES === */
-
+/* 
 .tandem-shell {
   min-height: 100vh;
   display: grid;
@@ -77,10 +65,10 @@ body {
 
 .lobby.with-panel {
   grid-template-columns: 320px 1fr 380px;
-}
+} */
 
 /* Left Sidebar - Rooms */
-.rooms-col {
+/* .rooms-col {
   border-right: 1px solid #2d2d2d;
   padding: 16px;
   background: #1e1e1e;
@@ -193,10 +181,10 @@ body {
 
 .join-inline:hover {
   background: #4752c4;
-}
+} */
 
 /* Center Panel - Team */
-.team-col {
+/* .team-col {
   padding: 16px 24px;
   background: #1a1a1a;
   overflow-y: auto;
@@ -336,10 +324,10 @@ button.primary.wide {
 .field input:focus {
   outline: none;
   border-color: #5865f2;
-}
+} */
 
 /* Right Panel - Room Details */
-.details-col {
+/* .details-col {
   border-left: 1px solid #2d2d2d;
   padding: 16px;
   background: #1e1e1e;
@@ -502,11 +490,11 @@ button.ghost.wide {
   transform: translateY(-50%);
   display: flex;
   gap: 4px;
-}
+} */
 
 /* === CALL VIEW STYLES === */
 
-.call-shell {
+/* .call-shell {
   min-height: 100vh;
   display: grid;
   grid-template-rows: 48px 1fr 80px;
@@ -764,4 +752,4 @@ video.mirror {
   border-radius: 6px;
   font-size: 13px;
   color: #d4d4d4;
-}
+} */

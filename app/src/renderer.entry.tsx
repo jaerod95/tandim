@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { CallApp } from "./renderer/CallApp";
-import { LobbyApp } from "./renderer/LobbyApp";
+import { LobbyApp } from "./renderer/Lobby/LobbyApp";
 import "./index.css";
 
 const mount = document.getElementById("root");
