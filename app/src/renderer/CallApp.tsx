@@ -12,7 +12,10 @@
 // import { enableRemoteLogging } from "./remoteLogger";
 
 import CallStage from "./CallStage";
-
+import { CallContextProvider } from "./CallContext";
+import styles from "./CallApp.module.css";
+import CallHeader from "./CallHeader";
+import CallFooter from "./CallFooter";
 // // Fix codec collision by preferring VP8
 // function filterCodecs(sdp: string): string {
 //   const lines = sdp.split("\r\n");
@@ -77,12 +80,13 @@ import CallStage from "./CallStage";
 export function CallApp() {
   // When you enter a call app, we need to establish a connection to the call
   return (
-    <CallContext.Provider>
-      <div className="call-shell"></div>
-      <CallHeader />
-      <CallStage />
-      <CallFooter />
-    </CallContext.Provider>
+    <CallContextProvider>
+      <div className={styles.callShell}>
+        <CallHeader />
+        <CallStage />
+        <CallFooter />
+      </div>
+    </CallContextProvider>
   );
 }
 
