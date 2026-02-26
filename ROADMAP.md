@@ -2,34 +2,37 @@
 
 ## Current State
 
-Working prototype with:
-- Lobby UI with room list, team members, room details panel
-- Voice/video calls via WebRTC mesh
-- Screen sharing
-- Heartbeat-based presence
+End-to-end MVP complete:
+- API server with debug routes (factory pattern), heartbeat pruning, `/api/rooms` polling endpoints
+- Electron main process with IPC handlers for multi-window (lobby + call windows), deep link support
+- Lobby UI with room list (emoji + occupancy badges), team members, room detail panel with join flow
+- WebRTC engine: `PeerConnectionManager` (per-peer) + `CallEngine` (orchestrator) + `useCallEngine` hook
+- Call window with video grid, mic/camera/screen share controls, leave button
+- Screen sharing with focused layout (large screen share view + camera tile strip)
+- Socket.io reconnection handling, `beforeunload` cleanup
 - Debug/introspection infrastructure (HTTP endpoints, CLI tool, MCP server)
-- Test suite (unit + E2E scenarios)
+- Test suite (unit + E2E scenarios, 15 tests passing)
 
 ## Phase 1: Stability & Polish
 
 Focus: Make what exists reliable and polished.
 
 - [ ] Audit and fix WebRTC connection edge cases (ICE failures, renegotiation, reconnection)
-- [ ] Polish screen sharing (viewer controls, proper aspect ratio, handle multi-monitor)
-- [ ] Reliable presence states (available, in call, idle, DND, offline)
-- [ ] Clean disconnect handling (graceful leave vs. crash/network drop)
+- [ ] Polish screen sharing (viewer controls, handle multi-monitor)
+- [x] Clean disconnect handling (graceful leave vs. crash/network drop) — beforeunload + socket reconnection
+- [ ] Reliable presence states (available, in call, idle, DND, offline) — **in progress**
 - [ ] Audio device selection and switching mid-call
 - [ ] Video device selection and switching mid-call
-- [ ] Proper error states in UI (connection failed, server unreachable, etc.)
+- [ ] Proper error states in UI (connection failed, server unreachable, etc.) — **in progress**
 - [ ] App tray icon with presence indicator
-- [ ] Keyboard shortcuts (mute toggle, camera toggle, leave call)
+- [x] Keyboard shortcuts (mute toggle, camera toggle, leave call) — **in progress**
 
 ## Phase 2: Crosstalk
 
 Focus: Implement the core differentiating feature.
 
-- [ ] Server-side crosstalk state management (who's in crosstalk with whom)
-- [ ] Socket events for crosstalk lifecycle (start, join, end)
+- [ ] Server-side crosstalk state management (who's in crosstalk with whom) — **in progress**
+- [ ] Socket events for crosstalk lifecycle (start, join, end) — **in progress**
 - [ ] Client-side audio routing (Web Audio API gain nodes per peer)
 - [ ] Crosstalk volume slider for outside conversations
 - [ ] Visual indicators in call UI (who's in crosstalk, who's outside)
