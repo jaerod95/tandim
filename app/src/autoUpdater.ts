@@ -1,9 +1,16 @@
-import { autoUpdater } from "electron-updater";
-import type { UpdateInfo } from "electron-updater";
-import { BrowserWindow, ipcMain } from "electron";
+import { autoUpdater, BrowserWindow, ipcMain } from "electron";
+import { updateElectronApp, UpdateSourceType } from "update-electron-app";
 
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
+// Configure auto-updates via Electron Forge's recommended approach.
+// Uses update.electronjs.org which proxies GitHub releases.
+// Automatically skips in dev mode (app.isPackaged === false).
+updateElectronApp({
+  updateSource: {
+    type: UpdateSourceType.ElectronPublicUpdateService,
+    repo: "jaerod95/tandim",
+  },
+  notifyUser: false,
+});
 
 function sendToAllWindows(channel: string, ...args: unknown[]): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -11,51 +18,23 @@ function sendToAllWindows(channel: string, ...args: unknown[]): void {
   }
 }
 
-autoUpdater.on("checking-for-update", () => {
-  console.log("Auto-updater: checking for update...");
+autoUpdater.on("update-available", () => {
+  console.log("Auto-updater: update available, downloading...");
+  sendToAllWindows("update:available");
 });
 
-autoUpdater.on("update-available", (info: UpdateInfo) => {
-  console.log(`Auto-updater: update available — v${info.version}`);
-  sendToAllWindows("update:available", { version: info.version });
-});
-
-autoUpdater.on("update-not-available", () => {
-  console.log("Auto-updater: no update available");
-});
-
-autoUpdater.on("download-progress", (progress) => {
-  console.log(`Auto-updater: download progress ${progress.percent.toFixed(1)}%`);
-  sendToAllWindows("update:progress", { percent: progress.percent });
-});
-
-autoUpdater.on("update-downloaded", () => {
-  console.log("Auto-updater: update downloaded");
-  sendToAllWindows("update:downloaded");
+autoUpdater.on("update-downloaded", (_event, _releaseNotes, releaseName) => {
+  const version = releaseName ?? "latest";
+  console.log(`Auto-updater: update downloaded — ${version}`);
+  sendToAllWindows("update:downloaded", { version });
 });
 
 autoUpdater.on("error", (error) => {
   console.error("Auto-updater error:", error);
 });
 
-export function checkForUpdates(): void {
-  autoUpdater.checkForUpdates().catch((err: unknown) => {
-    console.error("Auto-updater: failed to check for updates:", err);
-  });
-}
-
-export function downloadUpdate(): void {
-  autoUpdater.downloadUpdate().catch((err: unknown) => {
-    console.error("Auto-updater: failed to download update:", err);
-  });
-}
-
-export function installUpdate(): void {
-  autoUpdater.quitAndInstall();
-}
-
 export function registerAutoUpdateIpc(): void {
-  ipcMain.on("update:check", () => checkForUpdates());
-  ipcMain.on("update:download", () => downloadUpdate());
-  ipcMain.on("update:install", () => installUpdate());
+  ipcMain.on("update:install", () => {
+    autoUpdater.quitAndInstall();
+  });
 }

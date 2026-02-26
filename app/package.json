@@ -21,6 +21,10 @@
     "email": "jason.rodriguez@runway.com"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jaerod95/tandim"
+  },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
     "@electron-forge/maker-deb": "^7.11.1",
@@ -56,7 +60,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron-squirrel-startup": "^1.0.1",
-    "electron-updater": "^6.8.3",
+    "update-electron-app": "^3.0.0",
     "lucide-react": "^0.575.0",
     "radix-ui": "^1.4.3",
     "react": "^19.1.1",

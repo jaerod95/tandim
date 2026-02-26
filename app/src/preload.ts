@@ -72,30 +72,19 @@ const api = {
     ipcRenderer.send("dnd:setFromRenderer", enabled);
   },
 
-  // Auto-update
-  checkForUpdate: (): void => {
-    ipcRenderer.send("update:check");
-  },
-  downloadUpdate: (): void => {
-    ipcRenderer.send("update:download");
-  },
+  // Auto-update (uses update-electron-app with Forge GitHub releases)
   installUpdate: (): void => {
     ipcRenderer.send("update:install");
   },
-  onUpdateAvailable: (handler: (info: { version: string }) => void): void => {
-    ipcRenderer.on("update:available", (_event, info: { version: string }) =>
-      handler(info),
-    );
+  onUpdateAvailable: (handler: () => void): void => {
+    ipcRenderer.on("update:available", () => handler());
   },
-  onUpdateDownloaded: (handler: () => void): void => {
-    ipcRenderer.on("update:downloaded", () => handler());
-  },
-  onUpdateProgress: (
-    handler: (progress: { percent: number }) => void,
+  onUpdateDownloaded: (
+    handler: (info: { version: string }) => void,
   ): void => {
     ipcRenderer.on(
-      "update:progress",
-      (_event, progress: { percent: number }) => handler(progress),
+      "update:downloaded",
+      (_event, info: { version: string }) => handler(info),
     );
   },
 };
