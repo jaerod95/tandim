@@ -2,6 +2,7 @@ import type { Server as HttpServer } from "http";
 import { Server } from "socket.io";
 import { z } from "zod";
 import { RoomStateStore } from "./roomState";
+import { PresenceStore } from "./presenceStore";
 
 const joinSchema = z.object({
   workspaceId: z.string().min(1),
@@ -29,15 +30,68 @@ const crosstalkEndSchema = z.object({
   crosstalkId: z.string().min(1)
 });
 
-export function createSignalServer(httpServer: HttpServer, roomStateStore?: RoomStateStore): Server {
+const presenceConnectSchema = z.object({
+  userId: z.string().min(1),
+  displayName: z.string().min(1),
+  workspaceId: z.string().min(1)
+});
+
+const presenceStatusSchema = z.object({
+  status: z.enum(["available", "idle", "dnd"])
+});
+
+export function createSignalServer(
+  httpServer: HttpServer,
+  roomStateStore?: RoomStateStore,
+  presenceStore?: PresenceStore
+): Server {
   const io = new Server(httpServer, {
     cors: { origin: "*" },
     path: "/api/signal"
   });
 
   const rooms = roomStateStore ?? new RoomStateStore();
+  const presence = presenceStore ?? new PresenceStore();
 
   io.on("connection", (socket) => {
+    // --- Presence events ---
+
+    socket.on("presence:connect", (input: unknown) => {
+      const parsed = presenceConnectSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_presence_payload",
+          message: "Presence connect payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const { userId, displayName, workspaceId } = parsed.data;
+      const userPresence = presence.setPresence(socket.id, { userId, displayName, workspaceId });
+
+      // Join workspace channel so we can broadcast presence to all workspace members
+      socket.join(`presence:${workspaceId}`);
+
+      // Send the full presence list to the connecting client
+      socket.emit("presence:snapshot", presence.getAll(workspaceId));
+
+      // Broadcast to others in the workspace
+      socket.to(`presence:${workspaceId}`).emit("presence:user-online", userPresence);
+    });
+
+    socket.on("presence:status-change", (input: unknown) => {
+      const parsed = presenceStatusSchema.safeParse(input);
+      if (!parsed.success) return;
+
+      const updated = presence.setStatus(socket.id, parsed.data.status);
+      if (updated) {
+        io.to(`presence:${updated.workspaceId}`).emit("presence:user-updated", updated);
+      }
+    });
+
+    // --- Signal events ---
+
     socket.on("signal:join", (input: unknown) => {
       const parsed = joinSchema.safeParse(input);
       if (!parsed.success) {
@@ -67,6 +121,15 @@ export function createSignalServer(httpServer: HttpServer, roomStateStore?: Room
       });
 
       socket.to(getChannel(workspaceId, roomId)).emit("signal:peer-joined", { userId, displayName });
+
+      // Update presence to in-call.
+      // The call socket is separate from the lobby socket, so find the
+      // user's lobby presence entry by userId.
+      const lobbyPresence = presence.findByUserId(workspaceId, userId);
+      if (lobbyPresence) {
+        presence.setInCall(lobbyPresence.socketId, { workspaceId, roomId });
+        io.to(`presence:${workspaceId}`).emit("presence:user-updated", lobbyPresence);
+      }
     });
 
     socket.on("signal:heartbeat", () => {
@@ -188,9 +251,30 @@ export function createSignalServer(httpServer: HttpServer, roomStateStore?: Room
     });
 
     socket.on("disconnect", () => {
+      // Handle room leave
       const result = rooms.leaveBySocket(socket.id);
-      if (!result) {
-        return;
+      if (result) {
+        io.to(getChannel(result.roomKey.workspaceId, result.roomKey.roomId)).emit("signal:peer-left", {
+          userId: result.userId,
+          activeScreenSharerUserId: result.activeScreenSharerUserId
+        });
+
+        // The call window has its own socket, separate from the lobby socket.
+        // Find the user's lobby presence entry and clear their in-call state.
+        const lobbyPresence = presence.findByUserId(result.roomKey.workspaceId, result.userId);
+        if (lobbyPresence) {
+          presence.clearCall(lobbyPresence.socketId);
+          io.to(`presence:${lobbyPresence.workspaceId}`).emit("presence:user-updated", lobbyPresence);
+        }
+      }
+
+      // Handle presence removal (lobby socket disconnecting)
+      const removedPresence = presence.removeBySocket(socket.id);
+      if (removedPresence) {
+        io.to(`presence:${removedPresence.workspaceId}`).emit("presence:user-offline", {
+          userId: removedPresence.userId,
+          socketId: socket.id
+        });
       }
       const channel = getChannel(result.roomKey.workspaceId, result.roomKey.roomId);
       io.to(channel).emit("signal:peer-left", {

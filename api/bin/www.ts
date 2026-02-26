@@ -4,8 +4,9 @@ import createDebug from "debug";
 import app, { mountErrorHandlers } from "../app";
 import { createSignalServer } from "../services/signalServer";
 import { RoomStateStore } from "../services/roomState";
+import { PresenceStore } from "../services/presenceStore";
 import { createDebugRouter } from "../routes/debug";
-import { createRoomsRouter } from "../routes/api";
+import { createRoomsRouter, createPresenceRouter } from "../routes/api";
 
 const debug = createDebug("api:server");
 const port = normalizePort(process.env.PORT ?? "3000");
@@ -14,11 +15,13 @@ app.set("port", port);
 
 const server = http.createServer(app);
 const roomStateStore = new RoomStateStore();
-const io = createSignalServer(server, roomStateStore);
+const presenceStore = new PresenceStore();
+const io = createSignalServer(server, roomStateStore, presenceStore);
 
 // Mount routes that require server context, then error handlers last
 app.use("/api/debug", createDebugRouter({ roomStateStore, io }));
 app.use("/api/rooms", createRoomsRouter(roomStateStore));
+app.use("/api/presence", createPresenceRouter(presenceStore));
 mountErrorHandlers();
 
 // Prune inactive peers every 30 seconds
