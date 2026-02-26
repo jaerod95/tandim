@@ -11,6 +11,7 @@ import { createDebugRouter } from "../routes/debug";
 import { createRoomsRouter, createPresenceRouter } from "../routes/api";
 import { createRoomDefinitionsRouter } from "../routes/rooms";
 import { createProfilesRouter } from "../routes/profiles";
+import authRouter from "../routes/auth";
 
 const debug = createDebug("api:server");
 const port = normalizePort(process.env.PORT ?? "3000");
@@ -25,6 +26,7 @@ const userProfileStore = new UserProfileStore();
 const io = createSignalServer(server, roomStateStore, presenceStore);
 
 // Mount routes that require server context, then error handlers last
+app.use("/api/auth", authRouter);
 app.use("/api/debug", createDebugRouter({ roomStateStore, io }));
 app.use("/api/rooms", createRoomsRouter(roomStateStore));
 app.use("/api/presence", createPresenceRouter(presenceStore));

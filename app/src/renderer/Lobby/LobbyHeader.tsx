@@ -10,9 +10,10 @@ type LobbyHeaderProps = {
   dndActive: boolean;
   onToggleDnd: () => void;
   onOpenSettings?: () => void;
+  onLogout?: () => void;
 };
 
-export function LobbyHeader({ title, dndActive, onToggleDnd, onOpenSettings }: LobbyHeaderProps) {
+export function LobbyHeader({ title, dndActive, onToggleDnd, onOpenSettings, onLogout }: LobbyHeaderProps) {
   const showLogo = title === "Tandim";
 
   return (
@@ -57,6 +58,11 @@ export function LobbyHeader({ title, dndActive, onToggleDnd, onOpenSettings }: L
             aria-label="Open settings"
           >
             <Settings className="h-4 w-4" />
+          </Button>
+        )}
+        {onLogout && (
+          <Button variant="ghost" size="sm" onClick={onLogout}>
+            Sign out
           </Button>
         )}
       </div>

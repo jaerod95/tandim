@@ -18,6 +18,7 @@ export type CallSession = {
   roomId: string;
   displayName: string;
   userId: string;
+  token?: string;
 };
 
 export type Crosstalk = {

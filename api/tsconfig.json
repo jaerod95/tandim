@@ -16,6 +16,7 @@
     "routes/**/*.ts",
     "tests/**/*.ts",
     "services/**/*.ts",
+    "middleware/**/*.ts",
     "scripts/**/*.ts",
     "types/**/*.d.ts"
   ]

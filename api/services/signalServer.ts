@@ -3,6 +3,7 @@ import { Server } from "socket.io";
 import { z } from "zod";
 import { RoomStateStore, CROSSTALK_INVITE_TTL_MS } from "./roomState";
 import { PresenceStore } from "./presenceStore";
+import { verifyToken } from "./auth";
 
 const joinSchema = z.object({
   workspaceId: z.string().min(1),
@@ -82,6 +83,26 @@ export function createSignalServer(
     initiatorSocketId: string;
     initiatorDisplayName: string;
   }>();
+
+  // Socket.io auth middleware — verify JWT from handshake
+  const requireSocketAuth = process.env.REQUIRE_SOCKET_AUTH === "true";
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token as string | undefined;
+    if (token) {
+      const user = verifyToken(token);
+      if (user) {
+        socket.data.user = user;
+        return next();
+      }
+      if (requireSocketAuth) {
+        return next(new Error("Invalid auth token"));
+      }
+    } else if (requireSocketAuth) {
+      return next(new Error("Auth token required"));
+    }
+    // In dev/fallback mode, allow unauthenticated connections
+    next();
+  });
 
   // Periodically expire stale crosstalk invitations
   const expirationInterval = setInterval(() => {

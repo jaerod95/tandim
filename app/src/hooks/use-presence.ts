@@ -18,6 +18,7 @@ type UsePresenceOptions = {
   workspaceId: string;
   userId: string;
   displayName: string;
+  token?: string;
 };
 
 type UsePresenceReturn = {
@@ -28,7 +29,7 @@ type UsePresenceReturn = {
 };
 
 export function usePresence(options: UsePresenceOptions): UsePresenceReturn {
-  const { apiUrl, workspaceId, userId, displayName } = options;
+  const { apiUrl, workspaceId, userId, displayName, token } = options;
   const [users, setUsers] = useState<UserPresence[]>([]);
   const [connected, setConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
@@ -41,6 +42,7 @@ export function usePresence(options: UsePresenceOptions): UsePresenceReturn {
     const socket = io(apiUrl, {
       path: "/api/signal",
       transports: ["websocket"],
+      auth: token ? { token } : undefined,
     });
     socketRef.current = socket;
 
@@ -84,7 +86,7 @@ export function usePresence(options: UsePresenceOptions): UsePresenceReturn {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [apiUrl, workspaceId, userId, displayName]);
+  }, [apiUrl, workspaceId, userId, displayName, token]);
 
   return { users, connected, setStatus, socketRef };
 }

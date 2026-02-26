@@ -100,10 +100,11 @@ export class CallEngine {
     // Create AudioContext for routing remote audio through gain nodes
     this.audioContext = new AudioContext();
 
-    // Connect socket
+    // Connect socket with auth token if available
     this.socket = io(this.session.apiUrl, {
       path: "/api/signal",
       transports: ["websocket"],
+      auth: this.session.token ? { token: this.session.token } : undefined,
     });
 
     this.setupSocketListeners();

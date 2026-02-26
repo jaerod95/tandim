@@ -9,28 +9,17 @@ import { LobbyRightSidebar } from "@/renderer/Lobby/LobbyRightSidebar";
 import { UpdateBanner } from "@/renderer/Lobby/UpdateBanner";
 import { SettingsDialog } from "@/renderer/Lobby/SettingsDialog";
 import { QuickTalkNotification } from "@/renderer/Lobby/QuickTalkNotification";
+import { AuthScreen } from "@/renderer/Auth/AuthScreen";
 import type { CallSession, Room } from "@/renderer/types";
 import { DEFAULT_ROOMS } from "@/renderer/types";
 import { usePresence } from "@/hooks/use-presence";
+import { useAuth } from "@/hooks/use-auth";
 import { useIdleDetector } from "@/hooks/use-idle-detector";
 import { useDnd } from "@/hooks/use-dnd";
 import { useUserProfile } from "@/hooks/use-user-profile";
 
 const API_URL = "http://localhost:3000";
 const WORKSPACE_ID = "team-local";
-const DEFAULT_DISPLAY_NAME = "Jrod";
-
-function getStableUserId(): string {
-  const key = "tandim-user-id";
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = `u-${crypto.randomUUID().slice(0, 12)}`;
-    localStorage.setItem(key, id);
-  }
-  return id;
-}
-
-const USER_ID = getStableUserId();
 
 type RoomParticipant = { userId: string; displayName: string };
 
@@ -42,6 +31,51 @@ type IncomingQuickTalk = {
 };
 
 export function LobbyApp() {
+  const auth = useAuth({ apiUrl: API_URL });
+
+  if (auth.isLoading) {
+    return (
+      <ThemeProvider>
+        <div className="flex h-screen w-screen items-center justify-center bg-zinc-950 text-zinc-400">
+          Loading...
+        </div>
+      </ThemeProvider>
+    );
+  }
+
+  if (!auth.isAuthenticated) {
+    return (
+      <ThemeProvider>
+        <AuthScreen
+          onLogin={auth.login}
+          onRegister={auth.register}
+          error={auth.error}
+        />
+      </ThemeProvider>
+    );
+  }
+
+  return (
+    <AuthenticatedLobby
+      userId={auth.user!.userId}
+      displayName={auth.user!.displayName}
+      getToken={auth.getToken}
+      onLogout={auth.logout}
+    />
+  );
+}
+
+function AuthenticatedLobby({
+  userId: authUserId,
+  displayName: authDisplayName,
+  getToken,
+  onLogout,
+}: {
+  userId: string;
+  displayName: string;
+  getToken: () => string | null;
+  onLogout: () => void;
+}) {
   const [rooms, setRooms] = useState<Room[]>(DEFAULT_ROOMS);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [roomOccupancy, setRoomOccupancy] = useState<Map<string, number>>(new Map());
@@ -54,8 +88,8 @@ export function LobbyApp() {
 
   const { profile, updateProfile } = useUserProfile({
     apiUrl: API_URL,
-    userId: USER_ID,
-    defaultDisplayName: DEFAULT_DISPLAY_NAME,
+    userId: authUserId,
+    defaultDisplayName: authDisplayName,
   });
 
   // Auto-dismiss join error after 5 seconds
@@ -68,8 +102,9 @@ export function LobbyApp() {
   const { users, setStatus, socketRef } = usePresence({
     apiUrl: API_URL,
     workspaceId: WORKSPACE_ID,
-    userId: USER_ID,
+    userId: authUserId,
     displayName: profile.displayName,
+    token: getToken() ?? undefined,
   });
 
   // Sync DND status with presence
@@ -219,7 +254,8 @@ export function LobbyApp() {
       workspaceId: WORKSPACE_ID,
       roomId,
       displayName: profile.displayName,
-      userId: USER_ID,
+      userId: authUserId,
+      token: getToken() ?? undefined,
     };
 
     try {
@@ -228,7 +264,7 @@ export function LobbyApp() {
       console.error("Failed to open call window:", error);
       setJoinError("Failed to open call window. Please try again.");
     }
-  }, [profile.displayName]);
+  }, [profile.displayName, authUserId, getToken]);
 
   const joinRoom = useCallback(
     async (audioEnabled: boolean) => {
@@ -335,6 +371,7 @@ export function LobbyApp() {
               dndActive={dndActive}
               onToggleDnd={toggleDnd}
               onOpenSettings={() => setSettingsOpen(true)}
+              onLogout={onLogout}
             />
             <UpdateBanner />
             {!serverReachable && (
@@ -357,7 +394,7 @@ export function LobbyApp() {
             <div className="flex flex-1 overflow-hidden">
               <LobbyContent
                 displayName={profile.displayName}
-                userId={USER_ID}
+                userId={authUserId}
                 users={users}
                 onQuickTalk={handleQuickTalkRequest}
               />
