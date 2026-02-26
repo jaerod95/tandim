@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, globalShortcut, Menu, Tray, powerMonitor } from "electron";
+import { app, BrowserWindow, ipcMain, globalShortcut, Menu, Tray, nativeImage, powerMonitor } from "electron";
 import path from "node:path";
 import crypto from "node:crypto";
 import started from "electron-squirrel-startup";
@@ -244,6 +244,19 @@ function startIdleDetection(): void {
 // App lifecycle
 
 app.on("ready", () => {
+  // Set dock icon on macOS
+  if (process.platform === "darwin" && app.dock) {
+    const iconPath = path.join(__dirname, "../src/assets/icon.png");
+    try {
+      const icon = nativeImage.createFromPath(iconPath);
+      if (!icon.isEmpty()) {
+        app.dock.setIcon(icon);
+      }
+    } catch {
+      // Icon file may not exist in packaged app (uses icns instead)
+    }
+  }
+
   tray = createTray();
   mainWindow = createLobbyWindow();
   startIdleDetection();
