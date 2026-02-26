@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+type TrayStatus = "available" | "in-call" | "idle" | "dnd" | "offline";
+
 const api = {
   getPendingRoom: (): Promise<string | null> =>
     ipcRenderer.invoke("deep-link:getPendingRoom"),
@@ -25,6 +27,9 @@ const api = {
     displayName: string;
     userId: string;
   } | null> => ipcRenderer.invoke("call:getSession", sessionId),
+  setTrayStatus: (status: TrayStatus): void => {
+    ipcRenderer.send("tray:setStatus", status);
+  },
 };
 
 contextBridge.exposeInMainWorld("tandim", api);

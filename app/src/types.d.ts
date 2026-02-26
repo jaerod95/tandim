@@ -1,3 +1,5 @@
+type TrayStatus = "available" | "in-call" | "idle" | "dnd" | "offline";
+
 type TandimBridge = {
   getPendingRoom: () => Promise<string | null>;
   onDeepLinkRoom: (handler: (roomId: string) => void) => void;
@@ -15,6 +17,7 @@ type TandimBridge = {
     displayName: string;
     userId: string;
   } | null>;
+  setTrayStatus: (status: TrayStatus) => void;
 };
 
 declare global {
