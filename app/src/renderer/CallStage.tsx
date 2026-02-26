@@ -65,7 +65,7 @@ function EmptyStage() {
 export default function CallStage() {
   const { engine } = useCallContext();
 
-  const { remoteTiles, screenShareTile, localStream, cameraEnabled, activeScreenSharerUserId, screenSharing } = engine;
+  const { remoteTiles, screenShareTile, localStream, cameraEnabled, activeScreenSharerUserId, screenSharing, sinkId } = engine;
 
   // Screen share active — show focused layout
   if (activeScreenSharerUserId && screenShareTile) {
@@ -80,7 +80,7 @@ export default function CallStage() {
           <div className="flex h-28 shrink-0 gap-2 overflow-x-auto">
             {remoteTiles.map((tile) => (
               <div key={tile.userId} className="h-full w-40 shrink-0">
-                <RemoteVideo label={tile.displayName} stream={tile.stream} />
+                <RemoteVideo label={tile.displayName} stream={tile.stream} sinkId={sinkId || undefined} />
               </div>
             ))}
           </div>
@@ -111,6 +111,7 @@ export default function CallStage() {
                 key={tile.userId}
                 label={tile.displayName}
                 stream={tile.stream}
+                sinkId={sinkId || undefined}
               />
             ))}
           </div>
@@ -136,6 +137,7 @@ export default function CallStage() {
               key={tile.userId}
               label={tile.displayName}
               stream={tile.stream}
+              sinkId={sinkId || undefined}
             />
           ))}
         </div>

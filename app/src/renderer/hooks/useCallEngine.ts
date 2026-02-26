@@ -13,9 +13,13 @@ export type UseCallEngineReturn = {
   screenShareTile: RemoteTile | null;
   presence: PresenceEntry[];
   activeScreenSharerUserId: string | null;
+  sinkId: string;
   toggleMic: () => void;
   toggleCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
+  switchAudioDevice: (deviceId: string) => Promise<void>;
+  switchVideoDevice: (deviceId: string) => Promise<void>;
+  setSinkId: (deviceId: string) => void;
   leave: () => void;
 };
 
@@ -31,6 +35,7 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
   const [presence, setPresence] = useState<PresenceEntry[]>([]);
   const [activeScreenSharerUserId, setActiveScreenSharerUserId] = useState<string | null>(null);
   const [screenShareTile, setScreenShareTile] = useState<RemoteTile | null>(null);
+  const [sinkId, setSinkIdState] = useState("");
   const tileVersionRef = useRef(0);
 
   useEffect(() => {
@@ -97,6 +102,9 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
       onLocalStream: (stream: MediaStream) => {
         setLocalStream(stream);
       },
+      onSinkIdChange: (id: string) => {
+        setSinkIdState(id);
+      },
     });
 
     engineRef.current = engine;
@@ -129,6 +137,24 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     }
   }, []);
 
+  const switchAudioDevice = useCallback(async (deviceId: string) => {
+    if (engineRef.current) {
+      await engineRef.current.switchAudioDevice(deviceId);
+    }
+  }, []);
+
+  const switchVideoDevice = useCallback(async (deviceId: string) => {
+    if (engineRef.current) {
+      await engineRef.current.switchVideoDevice(deviceId);
+    }
+  }, []);
+
+  const setSinkId = useCallback((deviceId: string) => {
+    if (engineRef.current) {
+      engineRef.current.setSinkId(deviceId);
+    }
+  }, []);
+
   const leave = useCallback(() => {
     if (engineRef.current) {
       engineRef.current.leave();
@@ -147,9 +173,13 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     screenShareTile,
     presence,
     activeScreenSharerUserId,
+    sinkId,
     toggleMic,
     toggleCamera,
     toggleScreenShare,
+    switchAudioDevice,
+    switchVideoDevice,
+    setSinkId,
     leave,
   };
 }

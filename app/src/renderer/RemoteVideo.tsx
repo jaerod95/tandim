@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from "react";
 type RemoteVideoProps = {
   label: string;
   stream: MediaStream;
+  sinkId?: string;
 };
 
-export function RemoteVideo({ label, stream }: RemoteVideoProps) {
+export function RemoteVideo({ label, stream, sinkId }: RemoteVideoProps) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const [hasVideo, setHasVideo] = useState(false);
 
@@ -40,6 +41,20 @@ export function RemoteVideo({ label, stream }: RemoteVideoProps) {
       stream.removeEventListener("removetrack", handleRemoveTrack);
     };
   }, [stream, label]);
+
+  // Apply audio output device (sinkId) when it changes
+  useEffect(() => {
+    const videoEl = ref.current;
+    if (!videoEl || !sinkId) return;
+
+    // setSinkId is a Chromium-specific API on HTMLMediaElement
+    const el = videoEl as HTMLVideoElement & { setSinkId?: (id: string) => Promise<void> };
+    if (typeof el.setSinkId === "function") {
+      el.setSinkId(sinkId).catch((err) => {
+        console.error("Failed to set audio output device:", err);
+      });
+    }
+  }, [sinkId]);
 
   const initials = label.charAt(0).toUpperCase();
 
