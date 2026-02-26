@@ -61,18 +61,14 @@ Focus: Close the gap with Tandem's core features.
 - [ ] Deep link improvements (workspace + room routing)
 - [ ] Make a custom logo for the app and update the electron app icons
 - [ ] Add some basic branding to make it feel like an app
+- [ ] Bugfix: Fix join without audio button when joining a room from the lobby so the mic is set to muted
 
 ## Phase 5: Deployment & Distribution
 
 Focus: Get it running for the team.
 
-- [ ] Do Not Disturb mode
-- [ ] Deploy API server to cloud (Fly.io, Railway, or similar)
-- [ ] HTTPS + WSS for production signaling
-- [ ] TURN server setup for peers behind restrictive NATs
 - [ ] Electron auto-update (electron-updater + GitHub releases)
-- [ ] macOS code signing and notarization
-- [ ] Linux packaging (.deb, .AppImage)
+- [ ] macOS code signing and notarization (ad hoc)
 
 ## Future Ideas
 

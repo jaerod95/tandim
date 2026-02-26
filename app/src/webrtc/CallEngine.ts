@@ -707,6 +707,10 @@ export class CallEngine {
     this.socket = null;
   }
 
+  getSocket(): Socket | null {
+    return this.socket;
+  }
+
   getLocalStream(): MediaStream | null {
     return this.localStream;
   }

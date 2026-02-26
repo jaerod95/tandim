@@ -1,7 +1,7 @@
 import type { Server as HttpServer } from "http";
 import { Server } from "socket.io";
 import { z } from "zod";
-import { RoomStateStore } from "./roomState";
+import { RoomStateStore, CROSSTALK_INVITE_TTL_MS } from "./roomState";
 import { PresenceStore } from "./presenceStore";
 
 const joinSchema = z.object({
@@ -26,6 +26,18 @@ const crosstalkEndSchema = z.object({
   crosstalkId: z.string().min(1)
 });
 
+const crosstalkInviteSchema = z.object({
+  workspaceId: z.string().min(1),
+  roomId: z.string().min(1),
+  targetUserIds: z.array(z.string().min(1)).min(1)
+});
+
+const crosstalkInviteResponseSchema = z.object({
+  workspaceId: z.string().min(1),
+  roomId: z.string().min(1),
+  invitationId: z.string().min(1)
+});
+
 const presenceConnectSchema = z.object({
   userId: z.string().min(1),
   displayName: z.string().min(1),
@@ -48,6 +60,26 @@ export function createSignalServer(
 
   const rooms = roomStateStore ?? new RoomStateStore();
   const presence = presenceStore ?? new PresenceStore();
+
+  // Periodically expire stale crosstalk invitations
+  const expirationInterval = setInterval(() => {
+    const expired = rooms.expireCrosstalkInvitations();
+    for (const { roomKey, invitation } of expired) {
+      const participantUserIds = [invitation.inviterUserId, ...invitation.inviteeUserIds];
+      for (const userId of participantUserIds) {
+        const socketId = rooms.getPeerSocket(roomKey.workspaceId, roomKey.roomId, userId);
+        if (socketId) {
+          io.to(socketId).emit("signal:crosstalk-invite-expired", {
+            invitationId: invitation.invitationId
+          });
+        }
+      }
+    }
+  }, 5_000);
+
+  io.on("close", () => {
+    clearInterval(expirationInterval);
+  });
 
   io.on("connection", (socket) => {
     // --- Presence events ---
@@ -222,6 +254,181 @@ export function createSignalServer(
         "signal:crosstalk-ended",
         { crosstalkId: parsed.data.crosstalkId }
       );
+    });
+
+    socket.on("signal:crosstalk-invite", (input: unknown) => {
+      const parsed = crosstalkInviteSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_crosstalk_invite_payload",
+          message: "Crosstalk invite payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const membership = rooms.getMembershipBySocket(socket.id);
+      if (!membership) {
+        socket.emit("signal:error", {
+          code: "not_in_room",
+          message: "You must be in a room to invite",
+          retryable: false
+        });
+        return;
+      }
+
+      const { workspaceId, roomId, targetUserIds } = parsed.data;
+      if (membership.workspaceId !== workspaceId || membership.roomId !== roomId) {
+        socket.emit("signal:error", {
+          code: "room_mismatch",
+          message: "You are not in the specified room",
+          retryable: false
+        });
+        return;
+      }
+
+      const result = rooms.createCrosstalkInvitation(
+        workspaceId,
+        roomId,
+        membership.userId,
+        targetUserIds
+      );
+
+      if (!result.ok) {
+        socket.emit("signal:error", {
+          code: result.reason,
+          message: "Unable to create crosstalk invitation",
+          retryable: false
+        });
+        return;
+      }
+
+      for (const inviteeId of result.invitation.inviteeUserIds) {
+        const inviteeSocketId = rooms.getPeerSocket(workspaceId, roomId, inviteeId);
+        if (inviteeSocketId) {
+          io.to(inviteeSocketId).emit("signal:crosstalk-invited", {
+            invitationId: result.invitation.invitationId,
+            inviterUserId: result.invitation.inviterUserId,
+            inviterDisplayName: result.invitation.inviterDisplayName,
+            roomId
+          });
+        }
+      }
+
+      socket.emit("signal:crosstalk-invite-sent", {
+        invitationId: result.invitation.invitationId,
+        targetUserIds
+      });
+    });
+
+    socket.on("signal:crosstalk-invite-accept", (input: unknown) => {
+      const parsed = crosstalkInviteResponseSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_crosstalk_accept_payload",
+          message: "Crosstalk accept payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const membership = rooms.getMembershipBySocket(socket.id);
+      if (!membership) {
+        socket.emit("signal:error", {
+          code: "not_in_room",
+          message: "You must be in a room to accept",
+          retryable: false
+        });
+        return;
+      }
+
+      const { workspaceId, roomId, invitationId } = parsed.data;
+      const result = rooms.acceptCrosstalkInvitation(
+        workspaceId,
+        roomId,
+        invitationId,
+        membership.userId
+      );
+
+      if (!result.ok) {
+        socket.emit("signal:error", {
+          code: result.reason,
+          message: "Unable to accept crosstalk invitation",
+          retryable: false
+        });
+        return;
+      }
+
+      const inviterSocketId = rooms.getPeerSocket(workspaceId, roomId, result.invitation.inviterUserId);
+      if (inviterSocketId) {
+        io.to(inviterSocketId).emit("signal:crosstalk-invite-accepted", {
+          invitationId,
+          userId: membership.userId
+        });
+      }
+
+      if (result.allAccepted) {
+        const participantUserIds = [
+          result.invitation.inviterUserId,
+          ...result.invitation.inviteeUserIds
+        ];
+        for (const userId of participantUserIds) {
+          const targetSocketId = rooms.getPeerSocket(workspaceId, roomId, userId);
+          if (targetSocketId) {
+            io.to(targetSocketId).emit("signal:crosstalk-started", {
+              invitationId,
+              participantUserIds
+            });
+          }
+        }
+      }
+    });
+
+    socket.on("signal:crosstalk-invite-decline", (input: unknown) => {
+      const parsed = crosstalkInviteResponseSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_crosstalk_decline_payload",
+          message: "Crosstalk decline payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const membership = rooms.getMembershipBySocket(socket.id);
+      if (!membership) {
+        socket.emit("signal:error", {
+          code: "not_in_room",
+          message: "You must be in a room to decline",
+          retryable: false
+        });
+        return;
+      }
+
+      const { workspaceId, roomId, invitationId } = parsed.data;
+      const result = rooms.declineCrosstalkInvitation(
+        workspaceId,
+        roomId,
+        invitationId,
+        membership.userId
+      );
+
+      if (!result.ok) {
+        socket.emit("signal:error", {
+          code: result.reason,
+          message: "Unable to decline crosstalk invitation",
+          retryable: false
+        });
+        return;
+      }
+
+      const inviterSocketId = rooms.getPeerSocket(workspaceId, roomId, result.invitation.inviterUserId);
+      if (inviterSocketId) {
+        io.to(inviterSocketId).emit("signal:crosstalk-invite-declined", {
+          invitationId,
+          userId: membership.userId
+        });
+      }
     });
 
     socket.on("disconnect", () => {

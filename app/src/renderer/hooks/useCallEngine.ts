@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CallEngine, type CrosstalkInfo } from "@/webrtc/CallEngine";
 import type { CallSession, SignalPeer, RemoteTile, PresenceEntry } from "@/renderer/types";
+import type { Socket } from "socket.io-client";
 
 export type UseCallEngineReturn = {
   status: string;
@@ -27,6 +28,7 @@ export type UseCallEngineReturn = {
   endCrosstalk: (crosstalkId: string) => void;
   setCrosstalkVolume: (volume: number) => void;
   leave: () => void;
+  getSocket: (() => Socket | null) | null;
 };
 
 export function useCallEngine(session: CallSession | null): UseCallEngineReturn {
@@ -190,6 +192,10 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     }
   }, []);
 
+  const getSocket = useCallback((): Socket | null => {
+    return engineRef.current?.getSocket() ?? null;
+  }, []);
+
   const myCrosstalk = useMemo(() => {
     if (!session) return null;
     return activeCrosstalks.find(
@@ -222,5 +228,6 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     endCrosstalk,
     setCrosstalkVolume,
     leave,
+    getSocket,
   };
 }

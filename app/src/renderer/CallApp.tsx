@@ -2,10 +2,11 @@ import CallStage from "./CallStage";
 import { CallContextProvider, useCallContext } from "./CallContext";
 import CallHeader from "./CallHeader";
 import CallFooter from "./CallFooter";
+import CrosstalkInvitationOverlay from "./CrosstalkInvitation";
 import { useNotificationSounds } from "@/hooks/use-notification-sounds";
 
 function CallAppInner() {
-  const { engine } = useCallContext();
+  const { engine, pendingInvitations, acceptInvitation, declineInvitation } = useCallContext();
 
   useNotificationSounds({
     presence: engine.presence,
@@ -18,6 +19,11 @@ function CallAppInner() {
       <CallHeader />
       <CallStage />
       <CallFooter />
+      <CrosstalkInvitationOverlay
+        invitations={pendingInvitations}
+        onAccept={acceptInvitation}
+        onDecline={declineInvitation}
+      />
     </div>
   );
 }
