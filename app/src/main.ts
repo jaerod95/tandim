@@ -39,6 +39,7 @@ function showLobbyWindow(): void {
 
 function createLobbyWindow(): BrowserWindow {
   const window = new BrowserWindow({
+    title: "Tandim",
     width: 1320,
     height: 840,
     webPreferences: {
@@ -70,7 +71,11 @@ function createLobbyWindow(): BrowserWindow {
 }
 
 function createCallWindow(sessionId: string): BrowserWindow {
+  const session = callSessions.get(sessionId);
+  const roomName = session?.roomId ?? "Call";
+
   const window = new BrowserWindow({
+    title: `Tandim — ${roomName}`,
     width: 960,
     height: 640,
     webPreferences: {

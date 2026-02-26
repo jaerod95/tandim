@@ -1,6 +1,6 @@
 import * as React from "react";
-import { Volume2 } from "lucide-react";
 import { ROOMS } from "@/renderer/types";
+import { TandimLogo } from "@/components/TandimLogo";
 import {
   Sidebar,
   SidebarContent,
@@ -30,10 +30,7 @@ export function LobbySidebar({
   return (
     <Sidebar {...props}>
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1">
-          <Volume2 className="h-5 w-5 text-primary" />
-          <span className="text-sm font-semibold">Tandim</span>
-        </div>
+        <TandimLogo size="md" className="px-2 py-1" />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
