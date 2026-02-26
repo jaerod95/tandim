@@ -254,10 +254,16 @@ export function createSignalServer(
       // Handle room leave
       const result = rooms.leaveBySocket(socket.id);
       if (result) {
-        io.to(getChannel(result.roomKey.workspaceId, result.roomKey.roomId)).emit("signal:peer-left", {
+        const channel = getChannel(result.roomKey.workspaceId, result.roomKey.roomId);
+        io.to(channel).emit("signal:peer-left", {
           userId: result.userId,
           activeScreenSharerUserId: result.activeScreenSharerUserId
         });
+
+        // Clean up any crosstalks this peer was involved in
+        for (const crosstalkId of result.endedCrosstalkIds) {
+          io.to(channel).emit("signal:crosstalk-ended", { crosstalkId });
+        }
 
         // The call window has its own socket, separate from the lobby socket.
         // Find the user's lobby presence entry and clear their in-call state.
@@ -275,14 +281,6 @@ export function createSignalServer(
           userId: removedPresence.userId,
           socketId: socket.id
         });
-      }
-      const channel = getChannel(result.roomKey.workspaceId, result.roomKey.roomId);
-      io.to(channel).emit("signal:peer-left", {
-        userId: result.userId,
-        activeScreenSharerUserId: result.activeScreenSharerUserId
-      });
-      for (const crosstalkId of result.endedCrosstalkIds) {
-        io.to(channel).emit("signal:crosstalk-ended", { crosstalkId });
       }
     });
   });
