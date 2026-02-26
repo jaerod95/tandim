@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { getIceConfigFromEnv } from "../services/iceConfig";
 import type { RoomStateStore } from "../services/roomState";
+import type { PresenceStore } from "../services/presenceStore";
 import slackRouter from "./slack";
 
 const router = Router();
@@ -48,4 +49,20 @@ export function createRoomsRouter(roomStateStore: RoomStateStore): Router {
   });
 
   return roomsRouter;
+}
+
+/**
+ * Create presence API routes.
+ * Mounted by the entrypoint after the presence store is created.
+ */
+export function createPresenceRouter(presenceStore: PresenceStore): Router {
+  const presenceRouter = Router();
+
+  presenceRouter.get("/:workspaceId", (req, res) => {
+    const { workspaceId } = req.params;
+    const users = presenceStore.getAll(workspaceId);
+    res.json({ users });
+  });
+
+  return presenceRouter;
 }
