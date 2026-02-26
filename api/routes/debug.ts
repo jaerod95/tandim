@@ -51,20 +51,13 @@ export function createDebugRouter(context: DebugContext): Router {
       inactiveForMs: Date.now() - peer.lastHeartbeatAt,
     }));
 
-    const crosstalks = roomDetails.crosstalks.map((ct) => ({
-      id: ct.id,
-      initiatorUserId: ct.initiatorUserId,
-      participantUserIds: Array.from(ct.participantUserIds),
-      createdAt: new Date(ct.createdAt).toISOString(),
-    }));
-
     res.json({
       workspaceId,
       roomId,
       peerCount: peers.length,
       peers,
       activeScreenSharerUserId: roomDetails.activeScreenSharerUserId,
-      crosstalks,
+      crosstalks: roomDetails.crosstalks,
     });
   });
 

@@ -154,13 +154,6 @@ export function createMCPServer(context: MCPServerContext) {
             inactiveForMs: Date.now() - peer.lastHeartbeatAt,
           }));
 
-          const crosstalks = roomDetails.crosstalks.map((ct) => ({
-            id: ct.id,
-            initiatorUserId: ct.initiatorUserId,
-            participantUserIds: Array.from(ct.participantUserIds),
-            createdAt: new Date(ct.createdAt).toISOString(),
-          }));
-
           return {
             content: [
               {
@@ -172,7 +165,7 @@ export function createMCPServer(context: MCPServerContext) {
                     peerCount: peers.length,
                     peers,
                     activeScreenSharerUserId: roomDetails.activeScreenSharerUserId,
-                    crosstalks,
+                    crosstalks: roomDetails.crosstalks,
                   },
                   null,
                   2

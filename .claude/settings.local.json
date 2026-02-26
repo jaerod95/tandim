@@ -27,7 +27,14 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(npx vitest run)",
       "Bash(git add api/app.ts api/bin/mcp.ts api/bin/www.ts api/routes/api.ts api/routes/debug.ts api/tests/api-routes.test.ts app/src/main.ts app/src/types.d.ts app/src/renderer/CallApp.tsx app/src/renderer/CallContext.tsx app/src/renderer/CallFooter.tsx app/src/renderer/CallHeader.tsx app/src/renderer/CallStage.tsx app/src/renderer/RemoteVideo.tsx app/src/renderer/Lobby/LobbyApp.tsx app/src/renderer/Lobby/LobbyContent.tsx app/src/renderer/Lobby/LobbyHeader.tsx app/src/renderer/Lobby/LobbyRightSidebar.tsx app/src/renderer/Lobby/LobbySidebar.tsx app/src/renderer/hooks/useCallEngine.ts app/src/webrtc/CallEngine.ts app/src/webrtc/PeerConnectionManager.ts app/src/presence.ts app/src/renderer/remoteLogger.ts app/src/webrtc/iceFallback.ts app/src/webrtc/meshState.ts app/src/webrtc/reconnect.ts)",
-      "Bash(git checkout main)"
+      "Bash(git checkout main)",
+      "Bash(git add ROADMAP.md)",
+      "Bash(git add api/services/signalServer.ts)",
+      "Bash(git add app/src/renderer/CallHeader.tsx)",
+      "Bash(git add app/src/renderer/CallFooter.tsx)",
+      "Bash(git add app/src/webrtc/PeerConnectionManager.ts)",
+      "Bash(git stash)",
+      "Bash(git checkout claude/ecstatic-aryabhata)"
     ]
   }
 }

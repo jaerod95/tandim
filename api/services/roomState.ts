@@ -15,7 +15,12 @@ export type Crosstalk = {
   id: string;
   initiatorUserId: string;
   participantUserIds: Set<string>;
-  createdAt: number;
+};
+
+export type CrosstalkInfo = {
+  id: string;
+  initiatorUserId: string;
+  participantUserIds: string[];
 };
 
 type RoomState = {
@@ -32,6 +37,8 @@ export type JoinPeerInput = {
   socketId: string;
   nowMs?: number;
 };
+
+let crosstalkCounter = 0;
 
 export class RoomStateStore {
   private readonly rooms = new Map<string, RoomState>();
@@ -66,12 +73,7 @@ export class RoomStateStore {
     };
   }
 
-  leaveBySocket(socketId: string): {
-    roomKey: RoomKey;
-    userId: string;
-    activeScreenSharerUserId: string | null;
-    endedCrosstalkIds: string[];
-  } | null {
+  leaveBySocket(socketId: string): { roomKey: RoomKey; userId: string; activeScreenSharerUserId: string | null; removedCrosstalkIds: string[] } | null {
     const membership = this.socketToRoomAndUser.get(socketId);
     if (!membership) {
       return null;
@@ -87,9 +89,11 @@ export class RoomStateStore {
     if (room.activeScreenSharerUserId === membership.userId) {
       room.activeScreenSharerUserId = null;
     }
-    this.socketToRoomAndUser.delete(socketId);
 
-    const endedCrosstalkIds = this.removeUserFromCrosstalks(room, membership.userId);
+    // Clean up crosstalks this user was in
+    const removedCrosstalkIds = this.removeUserFromCrosstalks(room, membership.userId);
+
+    this.socketToRoomAndUser.delete(socketId);
 
     if (room.peersByUserId.size === 0) {
       this.rooms.delete(membership.roomKey);
@@ -99,7 +103,7 @@ export class RoomStateStore {
       roomKey: { workspaceId: membership.workspaceId, roomId: membership.roomId },
       userId: membership.userId,
       activeScreenSharerUserId: room.activeScreenSharerUserId,
-      endedCrosstalkIds
+      removedCrosstalkIds
     };
   }
 
@@ -187,9 +191,9 @@ export class RoomStateStore {
     return room ? room.peersByUserId.size : 0;
   }
 
-  pruneInactivePeers(maxInactivityMs: number, nowMs?: number): Array<{ roomKey: RoomKey; userId: string; endedCrosstalkIds: string[] }> {
+  pruneInactivePeers(maxInactivityMs: number, nowMs?: number): Array<{ roomKey: RoomKey; userId: string; removedCrosstalkIds: string[] }> {
     const now = nowMs ?? Date.now();
-    const removed: Array<{ roomKey: RoomKey; userId: string; endedCrosstalkIds: string[] }> = [];
+    const removed: Array<{ roomKey: RoomKey; userId: string; removedCrosstalkIds: string[] }> = [];
 
     for (const [key, room] of this.rooms.entries()) {
       const [workspaceId, roomId] = key.split(":");
@@ -202,8 +206,8 @@ export class RoomStateStore {
         if (room.activeScreenSharerUserId === peer.userId) {
           room.activeScreenSharerUserId = null;
         }
-        const endedCrosstalkIds = this.removeUserFromCrosstalks(room, peer.userId);
-        removed.push({ roomKey: { workspaceId, roomId }, userId: peer.userId, endedCrosstalkIds });
+        const removedCrosstalkIds = this.removeUserFromCrosstalks(room, peer.userId);
+        removed.push({ roomKey: { workspaceId, roomId }, userId: peer.userId, removedCrosstalkIds });
       }
 
       if (room.peersByUserId.size === 0) {
@@ -214,71 +218,74 @@ export class RoomStateStore {
     return removed;
   }
 
-  // ── Crosstalk methods ──────────────────────────────────────────
-
-  private nextCrosstalkId = 0;
-
   startCrosstalk(
-    workspaceId: string,
-    roomId: string,
-    initiatorUserId: string,
+    socketId: string,
     targetUserIds: string[]
-  ): { ok: true; crosstalk: Crosstalk; roomKey: RoomKey } | { ok: false; reason: string } {
-    const key = this.toRoomKey(workspaceId, roomId);
-    const room = this.rooms.get(key);
+  ): { ok: true; roomKey: RoomKey; crosstalk: CrosstalkInfo; autoLeftCrosstalkIds: string[] } | { ok: false; reason: string } {
+    const membership = this.socketToRoomAndUser.get(socketId);
+    if (!membership) {
+      return { ok: false, reason: "not_in_room" };
+    }
+
+    const room = this.rooms.get(membership.roomKey);
     if (!room) {
       return { ok: false, reason: "room_not_found" };
     }
 
-    if (!room.peersByUserId.has(initiatorUserId)) {
-      return { ok: false, reason: "initiator_not_in_room" };
-    }
-
+    // Validate all targets are in the room
     for (const targetId of targetUserIds) {
       if (!room.peersByUserId.has(targetId)) {
         return { ok: false, reason: "target_not_in_room" };
       }
     }
 
-    // Check if initiator or any target is already in a crosstalk
-    for (const ct of room.crosstalks.values()) {
-      if (ct.participantUserIds.has(initiatorUserId)) {
-        return { ok: false, reason: "already_in_crosstalk" };
-      }
-      for (const targetId of targetUserIds) {
-        if (ct.participantUserIds.has(targetId)) {
-          return { ok: false, reason: "target_already_in_crosstalk" };
+    if (targetUserIds.includes(membership.userId)) {
+      return { ok: false, reason: "cannot_crosstalk_self" };
+    }
+
+    // Auto-leave existing crosstalks for the initiator and all targets
+    const autoLeftCrosstalkIds: string[] = [];
+    const allParticipants = [membership.userId, ...targetUserIds];
+    for (const userId of allParticipants) {
+      const removed = this.removeUserFromCrosstalks(room, userId);
+      for (const id of removed) {
+        if (!autoLeftCrosstalkIds.includes(id)) {
+          autoLeftCrosstalkIds.push(id);
         }
       }
     }
 
-    const crosstalkId = `ct_${++this.nextCrosstalkId}`;
-    const participantUserIds = new Set([initiatorUserId, ...targetUserIds]);
-
+    const crosstalkId = `ct_${Date.now()}_${++crosstalkCounter}_${Math.random().toString(36).slice(2, 8)}`;
+    const participantUserIds = new Set([membership.userId, ...targetUserIds]);
     const crosstalk: Crosstalk = {
       id: crosstalkId,
-      initiatorUserId,
-      participantUserIds,
-      createdAt: Date.now()
+      initiatorUserId: membership.userId,
+      participantUserIds
     };
-
     room.crosstalks.set(crosstalkId, crosstalk);
 
     return {
       ok: true,
-      crosstalk,
-      roomKey: { workspaceId, roomId }
+      roomKey: { workspaceId: membership.workspaceId, roomId: membership.roomId },
+      crosstalk: {
+        id: crosstalkId,
+        initiatorUserId: membership.userId,
+        participantUserIds: Array.from(participantUserIds)
+      },
+      autoLeftCrosstalkIds
     };
   }
 
   endCrosstalk(
-    workspaceId: string,
-    roomId: string,
-    crosstalkId: string,
-    requestingUserId: string
+    socketId: string,
+    crosstalkId: string
   ): { ok: true; roomKey: RoomKey } | { ok: false; reason: string } {
-    const key = this.toRoomKey(workspaceId, roomId);
-    const room = this.rooms.get(key);
+    const membership = this.socketToRoomAndUser.get(socketId);
+    if (!membership) {
+      return { ok: false, reason: "not_in_room" };
+    }
+
+    const room = this.rooms.get(membership.roomKey);
     if (!room) {
       return { ok: false, reason: "room_not_found" };
     }
@@ -288,56 +295,42 @@ export class RoomStateStore {
       return { ok: false, reason: "crosstalk_not_found" };
     }
 
-    if (!crosstalk.participantUserIds.has(requestingUserId)) {
+    if (!crosstalk.participantUserIds.has(membership.userId)) {
       return { ok: false, reason: "not_in_crosstalk" };
     }
 
     room.crosstalks.delete(crosstalkId);
-    return { ok: true, roomKey: { workspaceId, roomId } };
+    return {
+      ok: true,
+      roomKey: { workspaceId: membership.workspaceId, roomId: membership.roomId }
+    };
   }
 
-  getCrosstalkForUser(workspaceId: string, roomId: string, userId: string): Crosstalk | null {
-    const room = this.rooms.get(this.toRoomKey(workspaceId, roomId));
-    if (!room) {
-      return null;
-    }
-    for (const ct of room.crosstalks.values()) {
-      if (ct.participantUserIds.has(userId)) {
-        return ct;
-      }
-    }
-    return null;
-  }
-
-  getCrosstalksInRoom(workspaceId: string, roomId: string): Crosstalk[] {
+  getCrosstalks(workspaceId: string, roomId: string): CrosstalkInfo[] {
     const room = this.rooms.get(this.toRoomKey(workspaceId, roomId));
     if (!room) {
       return [];
     }
-    return Array.from(room.crosstalks.values());
+    return Array.from(room.crosstalks.values()).map((ct) => ({
+      id: ct.id,
+      initiatorUserId: ct.initiatorUserId,
+      participantUserIds: Array.from(ct.participantUserIds)
+    }));
   }
 
-  /**
-   * Remove a user from all crosstalks in a room.
-   * If a crosstalk drops below 2 participants, it is auto-ended.
-   * Returns the IDs of crosstalks that were ended.
-   */
   private removeUserFromCrosstalks(room: RoomState, userId: string): string[] {
-    const ended: string[] = [];
-    for (const [id, ct] of room.crosstalks.entries()) {
-      if (!ct.participantUserIds.has(userId)) {
-        continue;
-      }
+    const removedIds: string[] = [];
+    for (const [id, ct] of room.crosstalks) {
+      if (!ct.participantUserIds.has(userId)) continue;
       ct.participantUserIds.delete(userId);
+      // Remove the crosstalk if fewer than 2 participants remain
       if (ct.participantUserIds.size < 2) {
         room.crosstalks.delete(id);
-        ended.push(id);
+        removedIds.push(id);
       }
     }
-    return ended;
+    return removedIds;
   }
-
-  // ── Private helpers ───────────────────────────────────────────
 
   private ensureRoom(roomKey: string): RoomState {
     const existing = this.rooms.get(roomKey);
@@ -370,11 +363,7 @@ export class RoomStateStore {
     });
   }
 
-  getRoomDetails(workspaceId: string, roomId: string): {
-    peers: Peer[];
-    activeScreenSharerUserId: string | null;
-    crosstalks: Crosstalk[];
-  } | null {
+  getRoomDetails(workspaceId: string, roomId: string): { peers: Peer[]; activeScreenSharerUserId: string | null; crosstalks: CrosstalkInfo[] } | null {
     const room = this.rooms.get(this.toRoomKey(workspaceId, roomId));
     if (!room) {
       return null;
@@ -382,7 +371,11 @@ export class RoomStateStore {
     return {
       peers: Array.from(room.peersByUserId.values()),
       activeScreenSharerUserId: room.activeScreenSharerUserId,
-      crosstalks: Array.from(room.crosstalks.values()),
+      crosstalks: Array.from(room.crosstalks.values()).map((ct) => ({
+        id: ct.id,
+        initiatorUserId: ct.initiatorUserId,
+        participantUserIds: Array.from(ct.participantUserIds)
+      })),
     };
   }
 }

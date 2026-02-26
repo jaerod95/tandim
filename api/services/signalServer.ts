@@ -19,14 +19,10 @@ const relaySchema = z.object({
 });
 
 const crosstalkStartSchema = z.object({
-  workspaceId: z.string().min(1),
-  roomId: z.string().min(1),
   targetUserIds: z.array(z.string().min(1)).min(1)
 });
 
 const crosstalkEndSchema = z.object({
-  workspaceId: z.string().min(1),
-  roomId: z.string().min(1),
   crosstalkId: z.string().min(1)
 });
 
@@ -70,13 +66,8 @@ export function createSignalServer(
       const { userId, displayName, workspaceId } = parsed.data;
       const userPresence = presence.setPresence(socket.id, { userId, displayName, workspaceId });
 
-      // Join workspace channel so we can broadcast presence to all workspace members
       socket.join(`presence:${workspaceId}`);
-
-      // Send the full presence list to the connecting client
       socket.emit("presence:snapshot", presence.getAll(workspaceId));
-
-      // Broadcast to others in the workspace
       socket.to(`presence:${workspaceId}`).emit("presence:user-online", userPresence);
     });
 
@@ -113,18 +104,18 @@ export function createSignalServer(
       });
       socket.join(getChannel(workspaceId, roomId));
 
+      const crosstalks = rooms.getCrosstalks(workspaceId, roomId);
       socket.emit("signal:joined", {
         workspaceId,
         roomId,
         peers: joined.roomPeers.map((peer) => ({ userId: peer.userId, displayName: peer.displayName })),
-        activeScreenSharerUserId: joined.activeScreenSharerUserId
+        activeScreenSharerUserId: joined.activeScreenSharerUserId,
+        crosstalks
       });
 
       socket.to(getChannel(workspaceId, roomId)).emit("signal:peer-joined", { userId, displayName });
 
-      // Update presence to in-call.
-      // The call socket is separate from the lobby socket, so find the
-      // user's lobby presence entry by userId.
+      // Update presence to in-call
       const lobbyPresence = presence.findByUserId(workspaceId, userId);
       if (lobbyPresence) {
         presence.setInCall(lobbyPresence.socketId, { workspaceId, roomId });
@@ -178,39 +169,31 @@ export function createSignalServer(
       const parsed = crosstalkStartSchema.safeParse(input);
       if (!parsed.success) {
         socket.emit("signal:error", {
-          code: "invalid_crosstalk_start_payload",
+          code: "invalid_crosstalk_payload",
           message: "Crosstalk start payload is invalid",
           retryable: false
         });
         return;
       }
 
-      const { workspaceId, roomId, targetUserIds } = parsed.data;
-      const membership = rooms.getMembershipBySocket(socket.id);
-      if (!membership || membership.workspaceId !== workspaceId || membership.roomId !== roomId) {
-        socket.emit("signal:error", {
-          code: "not_in_room",
-          message: "You are not in this room",
-          retryable: false
-        });
-        return;
-      }
-
-      const result = rooms.startCrosstalk(workspaceId, roomId, membership.userId, targetUserIds);
+      const result = rooms.startCrosstalk(socket.id, parsed.data.targetUserIds);
       if (!result.ok) {
         socket.emit("signal:error", {
           code: result.reason,
           message: "Unable to start crosstalk",
-          retryable: false
+          retryable: result.reason !== "not_in_room"
         });
         return;
       }
 
-      const channel = getChannel(workspaceId, roomId);
+      const channel = getChannel(result.roomKey.workspaceId, result.roomKey.roomId);
+
+      for (const endedId of result.autoLeftCrosstalkIds) {
+        io.to(channel).emit("signal:crosstalk-ended", { crosstalkId: endedId });
+      }
+
       io.to(channel).emit("signal:crosstalk-started", {
-        crosstalkId: result.crosstalk.id,
-        initiatorUserId: result.crosstalk.initiatorUserId,
-        participantUserIds: Array.from(result.crosstalk.participantUserIds)
+        crosstalk: result.crosstalk
       });
     });
 
@@ -218,25 +201,14 @@ export function createSignalServer(
       const parsed = crosstalkEndSchema.safeParse(input);
       if (!parsed.success) {
         socket.emit("signal:error", {
-          code: "invalid_crosstalk_end_payload",
+          code: "invalid_crosstalk_payload",
           message: "Crosstalk end payload is invalid",
           retryable: false
         });
         return;
       }
 
-      const { workspaceId, roomId, crosstalkId } = parsed.data;
-      const membership = rooms.getMembershipBySocket(socket.id);
-      if (!membership || membership.workspaceId !== workspaceId || membership.roomId !== roomId) {
-        socket.emit("signal:error", {
-          code: "not_in_room",
-          message: "You are not in this room",
-          retryable: false
-        });
-        return;
-      }
-
-      const result = rooms.endCrosstalk(workspaceId, roomId, crosstalkId, membership.userId);
+      const result = rooms.endCrosstalk(socket.id, parsed.data.crosstalkId);
       if (!result.ok) {
         socket.emit("signal:error", {
           code: result.reason,
@@ -246,8 +218,10 @@ export function createSignalServer(
         return;
       }
 
-      const channel = getChannel(workspaceId, roomId);
-      io.to(channel).emit("signal:crosstalk-ended", { crosstalkId });
+      io.to(getChannel(result.roomKey.workspaceId, result.roomKey.roomId)).emit(
+        "signal:crosstalk-ended",
+        { crosstalkId: parsed.data.crosstalkId }
+      );
     });
 
     socket.on("disconnect", () => {
@@ -255,18 +229,18 @@ export function createSignalServer(
       const result = rooms.leaveBySocket(socket.id);
       if (result) {
         const channel = getChannel(result.roomKey.workspaceId, result.roomKey.roomId);
+
+        // Notify about crosstalks ended due to disconnect
+        for (const crosstalkId of result.removedCrosstalkIds) {
+          io.to(channel).emit("signal:crosstalk-ended", { crosstalkId });
+        }
+
         io.to(channel).emit("signal:peer-left", {
           userId: result.userId,
           activeScreenSharerUserId: result.activeScreenSharerUserId
         });
 
-        // Clean up any crosstalks this peer was involved in
-        for (const crosstalkId of result.endedCrosstalkIds) {
-          io.to(channel).emit("signal:crosstalk-ended", { crosstalkId });
-        }
-
-        // The call window has its own socket, separate from the lobby socket.
-        // Find the user's lobby presence entry and clear their in-call state.
+        // Clear in-call presence for the user's lobby socket
         const lobbyPresence = presence.findByUserId(result.roomKey.workspaceId, result.userId);
         if (lobbyPresence) {
           presence.clearCall(lobbyPresence.socketId);

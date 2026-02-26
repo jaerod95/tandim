@@ -2,6 +2,12 @@ import { io, Socket } from "socket.io-client";
 import { PeerConnectionManager } from "./PeerConnectionManager";
 import type { CallSession, SignalPeer } from "../renderer/types";
 
+export type CrosstalkInfo = {
+  id: string;
+  initiatorUserId: string;
+  participantUserIds: string[];
+};
+
 export type CallEngineCallbacks = {
   onStatusChange: (status: string) => void;
   onPeerJoined: (peer: SignalPeer) => void;
@@ -16,6 +22,7 @@ export type CallEngineCallbacks = {
   onDisconnected: () => void;
   onLocalStream: (stream: MediaStream) => void;
   onSinkIdChange?: (sinkId: string) => void;
+  onCrosstalksChanged: (crosstalks: CrosstalkInfo[]) => void;
 };
 
 export class CallEngine {
@@ -34,6 +41,7 @@ export class CallEngine {
   private _joined = false;
   private _activeScreenSharerUserId: string | null = null;
   private _sinkId = "";
+  private _activeCrosstalks = new Map<string, CrosstalkInfo>();
   private destroyed = false;
 
   /** Set of peerIds that were already in the room when we joined */
@@ -123,6 +131,7 @@ export class CallEngine {
     this.socket.on("signal:joined", (data: {
       peers: SignalPeer[];
       activeScreenSharerUserId: string | null;
+      crosstalks?: CrosstalkInfo[];
     }) => {
       if (this.destroyed) return;
       this._joined = true;
@@ -150,6 +159,15 @@ export class CallEngine {
         this._activeScreenSharerUserId = data.activeScreenSharerUserId;
         this.callbacks.onScreenShareStarted(data.activeScreenSharerUserId);
       }
+
+      // Load existing crosstalks
+      this._activeCrosstalks.clear();
+      if (data.crosstalks) {
+        for (const ct of data.crosstalks) {
+          this._activeCrosstalks.set(ct.id, ct);
+        }
+      }
+      this.callbacks.onCrosstalksChanged(Array.from(this._activeCrosstalks.values()));
     });
 
     this.socket.on("signal:peer-joined", (data: SignalPeer) => {
@@ -238,6 +256,18 @@ export class CallEngine {
         this.callbacks.onRemoteScreenStreamRemoved(prevSharer);
       }
       this.callbacks.onScreenShareStopped();
+    });
+
+    this.socket.on("signal:crosstalk-started", (data: { crosstalk: CrosstalkInfo }) => {
+      if (this.destroyed) return;
+      this._activeCrosstalks.set(data.crosstalk.id, data.crosstalk);
+      this.callbacks.onCrosstalksChanged(Array.from(this._activeCrosstalks.values()));
+    });
+
+    this.socket.on("signal:crosstalk-ended", (data: { crosstalkId: string }) => {
+      if (this.destroyed) return;
+      this._activeCrosstalks.delete(data.crosstalkId);
+      this.callbacks.onCrosstalksChanged(Array.from(this._activeCrosstalks.values()));
     });
 
     this.socket.on("signal:error", (data: { code: string; message: string }) => {
@@ -590,9 +620,18 @@ export class CallEngine {
     return this.localStream;
   }
 
+  startCrosstalk(targetUserIds: string[]): void {
+    this.socket?.emit("signal:crosstalk-start", { targetUserIds });
+  }
+
+  endCrosstalk(crosstalkId: string): void {
+    this.socket?.emit("signal:crosstalk-end", { crosstalkId });
+  }
+
   get micEnabled(): boolean { return this._micEnabled; }
   get cameraEnabled(): boolean { return this._cameraEnabled; }
   get screenSharing(): boolean { return this._screenSharing; }
   get joined(): boolean { return this._joined; }
   get sinkId(): string { return this._sinkId; }
+  get activeCrosstalks(): CrosstalkInfo[] { return Array.from(this._activeCrosstalks.values()); }
 }
