@@ -10,6 +10,7 @@ import type { CallSession } from "@/renderer/types";
 import { ROOMS } from "@/renderer/types";
 import { usePresence } from "@/hooks/use-presence";
 import { useIdleDetector } from "@/hooks/use-idle-detector";
+import { useDnd } from "@/hooks/use-dnd";
 
 const API_URL = "http://localhost:3000";
 const WORKSPACE_ID = "team-local";
@@ -24,6 +25,7 @@ export function LobbyApp() {
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [serverReachable, setServerReachable] = useState(true);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const { dndActive, toggleDnd } = useDnd();
 
   // Auto-dismiss join error after 5 seconds
   useEffect(() => {
@@ -39,9 +41,22 @@ export function LobbyApp() {
     displayName: DISPLAY_NAME,
   });
 
-  // Idle detection
-  const onIdle = useCallback(() => setStatus("idle"), [setStatus]);
-  const onActive = useCallback(() => setStatus("available"), [setStatus]);
+  // Sync DND status with presence
+  useEffect(() => {
+    if (dndActive) {
+      setStatus("dnd");
+    } else {
+      setStatus("available");
+    }
+  }, [dndActive, setStatus]);
+
+  // Idle detection (DND takes priority)
+  const onIdle = useCallback(() => {
+    if (!dndActive) setStatus("idle");
+  }, [setStatus, dndActive]);
+  const onActive = useCallback(() => {
+    if (!dndActive) setStatus("available");
+  }, [setStatus, dndActive]);
   useIdleDetector({ onIdle, onActive });
 
   // Derive room occupancy from presence data
@@ -155,7 +170,11 @@ export function LobbyApp() {
             roomOccupancy={mergedOccupancy}
           />
           <SidebarInset>
-            <LobbyHeader title={selectedRoom ?? "Tandim"} />
+            <LobbyHeader
+              title={selectedRoom ?? "Tandim"}
+              dndActive={dndActive}
+              onToggleDnd={toggleDnd}
+            />
             {!serverReachable && (
               <div className="flex items-center gap-2 border-b border-red-900/50 bg-red-950/50 px-4 py-2 text-xs text-red-400">
                 <span className="inline-block h-2 w-2 rounded-full bg-red-500" />

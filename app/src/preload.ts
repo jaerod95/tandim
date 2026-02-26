@@ -35,6 +35,14 @@ const api = {
       callback(isIdle),
     );
   },
+  onDndToggle: (handler: (enabled: boolean) => void): void => {
+    ipcRenderer.on("dnd:toggle", (_event, enabled: boolean) =>
+      handler(enabled),
+    );
+  },
+  setDndFromRenderer: (enabled: boolean): void => {
+    ipcRenderer.send("dnd:setFromRenderer", enabled);
+  },
 };
 
 contextBridge.exposeInMainWorld("tandim", api);

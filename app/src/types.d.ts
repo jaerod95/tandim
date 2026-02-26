@@ -19,6 +19,8 @@ type TandimBridge = {
   } | null>;
   setTrayStatus: (status: TrayStatus) => void;
   onIdleStateChanged: (callback: (isIdle: boolean) => void) => void;
+  onDndToggle: (handler: (enabled: boolean) => void) => void;
+  setDndFromRenderer: (enabled: boolean) => void;
 };
 
 declare global {

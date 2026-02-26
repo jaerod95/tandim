@@ -1,12 +1,17 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { BellOff, Bell } from "lucide-react";
 import { TandimLogo } from "@/components/TandimLogo";
 
 type LobbyHeaderProps = {
   title: string;
+  dndActive: boolean;
+  onToggleDnd: () => void;
 };
 
-export function LobbyHeader({ title }: LobbyHeaderProps) {
+export function LobbyHeader({ title, dndActive, onToggleDnd }: LobbyHeaderProps) {
   const showLogo = title === "Tandim";
 
   return (
@@ -18,6 +23,31 @@ export function LobbyHeader({ title }: LobbyHeaderProps) {
       ) : (
         <h1 className="text-sm font-medium">{title}</h1>
       )}
+      <div className="ml-auto flex items-center gap-2">
+        {dndActive && (
+          <span className="text-xs font-medium text-red-500">DND</span>
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={dndActive ? "destructive" : "ghost"}
+              size="icon"
+              className="h-7 w-7"
+              onClick={onToggleDnd}
+              aria-label={dndActive ? "Turn off Do Not Disturb" : "Do Not Disturb"}
+            >
+              {dndActive ? (
+                <BellOff className="h-4 w-4" />
+              ) : (
+                <Bell className="h-4 w-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {dndActive ? "Turn off Do Not Disturb" : "Do Not Disturb"}
+          </TooltipContent>
+        </Tooltip>
+      </div>
     </header>
   );
 }

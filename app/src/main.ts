@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, Tray, powerMonitor } from "electron";
+import { app, BrowserWindow, ipcMain, globalShortcut, Menu, Tray, powerMonitor } from "electron";
 import path from "node:path";
 import crypto from "node:crypto";
 import started from "electron-squirrel-startup";
@@ -21,6 +21,7 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let currentTrayStatus: TrayStatus = "available";
 let isQuitting = false;
+let dndEnabled = false;
 let pendingRoom: string | null = null;
 const callSessions = new Map<string, CallSession>();
 
@@ -185,6 +186,19 @@ ipcMain.on("tray:setStatus", (_event, status: TrayStatus) => {
   updateTrayStatus(status);
 });
 
+ipcMain.on("dnd:setFromRenderer", (_event, enabled: boolean) => {
+  dndEnabled = enabled;
+  updateTrayStatus(enabled ? "dnd" : "available");
+});
+
+function setDnd(enabled: boolean): void {
+  dndEnabled = enabled;
+  updateTrayStatus(enabled ? "dnd" : "available");
+  if (mainWindow) {
+    mainWindow.webContents.send("dnd:toggle", enabled);
+  }
+}
+
 // Deep link protocol
 
 app.setAsDefaultProtocolClient("tandim");
@@ -233,10 +247,20 @@ app.on("ready", () => {
   tray = createTray();
   mainWindow = createLobbyWindow();
   startIdleDetection();
+
+  // DND keyboard shortcut
+  const accelerator = process.platform === "darwin" ? "CommandOrControl+Shift+D" : "Ctrl+Shift+D";
+  globalShortcut.register(accelerator, () => {
+    setDnd(!dndEnabled);
+  });
 });
 
 app.on("before-quit", () => {
   isQuitting = true;
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on("window-all-closed", () => {
