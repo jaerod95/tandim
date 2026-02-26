@@ -48,6 +48,19 @@ const presenceStatusSchema = z.object({
   status: z.enum(["available", "idle", "dnd"])
 });
 
+const quickTalkRequestSchema = z.object({
+  workspaceId: z.string().min(1),
+  targetUserId: z.string().min(1)
+});
+
+const quickTalkAcceptSchema = z.object({
+  roomId: z.string().min(1)
+});
+
+const quickTalkDeclineSchema = z.object({
+  roomId: z.string().min(1)
+});
+
 export function createSignalServer(
   httpServer: HttpServer,
   roomStateStore?: RoomStateStore,
@@ -60,6 +73,15 @@ export function createSignalServer(
 
   const rooms = roomStateStore ?? new RoomStateStore();
   const presence = presenceStore ?? new PresenceStore();
+
+  // roomId -> { initiatorUserId, targetUserId, workspaceId, initiatorSocketId }
+  const pendingQuickTalks = new Map<string, {
+    initiatorUserId: string;
+    targetUserId: string;
+    workspaceId: string;
+    initiatorSocketId: string;
+    initiatorDisplayName: string;
+  }>();
 
   // Periodically expire stale crosstalk invitations
   const expirationInterval = setInterval(() => {
@@ -431,6 +453,143 @@ export function createSignalServer(
       }
     });
 
+    // --- Quick talk events ---
+
+    socket.on("signal:quick-talk-request", (input: unknown) => {
+      const parsed = quickTalkRequestSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_quick_talk_payload",
+          message: "Quick talk request payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const { workspaceId, targetUserId } = parsed.data;
+
+      // Find the requester's presence to get their userId and displayName
+      const requesterPresence = presence.getBySocket(socket.id);
+      if (!requesterPresence) {
+        socket.emit("signal:error", {
+          code: "not_connected",
+          message: "Must be connected to presence before requesting quick talk",
+          retryable: false
+        });
+        return;
+      }
+
+      // Find the target user's presence socket
+      const targetPresence = presence.findByUserId(workspaceId, targetUserId);
+      if (!targetPresence) {
+        socket.emit("signal:error", {
+          code: "target_not_found",
+          message: "Target user is not online",
+          retryable: false
+        });
+        return;
+      }
+
+      if (targetPresence.status === "dnd") {
+        socket.emit("signal:error", {
+          code: "target_dnd",
+          message: "Target user is in Do Not Disturb mode",
+          retryable: false
+        });
+        return;
+      }
+
+      // Create a temporary quick talk room
+      const roomId = rooms.createQuickTalkRoom(workspaceId, requesterPresence.userId, targetUserId);
+
+      // Track the pending quick talk
+      pendingQuickTalks.set(roomId, {
+        initiatorUserId: requesterPresence.userId,
+        targetUserId,
+        workspaceId,
+        initiatorSocketId: socket.id,
+        initiatorDisplayName: requesterPresence.displayName
+      });
+
+      // Notify the requester with the room ID
+      socket.emit("signal:quick-talk-created", {
+        roomId,
+        targetUserId
+      });
+
+      // Notify the target user
+      io.to(targetPresence.socketId).emit("signal:quick-talk-incoming", {
+        roomId,
+        fromUserId: requesterPresence.userId,
+        fromDisplayName: requesterPresence.displayName,
+        workspaceId
+      });
+    });
+
+    socket.on("signal:quick-talk-accept", (input: unknown) => {
+      const parsed = quickTalkAcceptSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_quick_talk_payload",
+          message: "Quick talk accept payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const { roomId } = parsed.data;
+      const pending = pendingQuickTalks.get(roomId);
+      if (!pending) {
+        socket.emit("signal:error", {
+          code: "quick_talk_not_found",
+          message: "Quick talk request not found or already expired",
+          retryable: false
+        });
+        return;
+      }
+
+      // Notify the initiator that the call was accepted
+      io.to(pending.initiatorSocketId).emit("signal:quick-talk-accepted", {
+        roomId,
+        targetUserId: pending.targetUserId
+      });
+
+      // Clean up pending state
+      pendingQuickTalks.delete(roomId);
+    });
+
+    socket.on("signal:quick-talk-decline", (input: unknown) => {
+      const parsed = quickTalkDeclineSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_quick_talk_payload",
+          message: "Quick talk decline payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const { roomId } = parsed.data;
+      const pending = pendingQuickTalks.get(roomId);
+      if (!pending) {
+        socket.emit("signal:error", {
+          code: "quick_talk_not_found",
+          message: "Quick talk request not found or already expired",
+          retryable: false
+        });
+        return;
+      }
+
+      // Notify the initiator that the call was declined
+      io.to(pending.initiatorSocketId).emit("signal:quick-talk-declined", {
+        roomId,
+        targetUserId: pending.targetUserId
+      });
+
+      // Clean up pending state
+      pendingQuickTalks.delete(roomId);
+    });
+
     socket.on("disconnect", () => {
       // Handle room leave
       const result = rooms.leaveBySocket(socket.id);
@@ -462,6 +621,17 @@ export function createSignalServer(
           userId: removedPresence.userId,
           socketId: socket.id
         });
+      }
+
+      // Clean up any pending quick talks initiated by this socket
+      for (const [roomId, pending] of pendingQuickTalks) {
+        if (pending.initiatorSocketId === socket.id) {
+          const targetPresence = presence.findByUserId(pending.workspaceId, pending.targetUserId);
+          if (targetPresence) {
+            io.to(targetPresence.socketId).emit("signal:quick-talk-cancelled", { roomId });
+          }
+          pendingQuickTalks.delete(roomId);
+        }
       }
     });
   });

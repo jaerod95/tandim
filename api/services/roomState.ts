@@ -52,6 +52,7 @@ export type JoinPeerInput = {
 };
 
 let crosstalkCounter = 0;
+let quickTalkCounter = 0;
 
 export const CROSSTALK_INVITE_TTL_MS = 30_000;
 
@@ -61,6 +62,7 @@ export class RoomStateStore {
     string,
     { roomKey: string; workspaceId: string; roomId: string; userId: string }
   >();
+  private readonly quickTalkRooms = new Set<string>();
 
   joinPeer(input: JoinPeerInput): { roomPeers: Peer[]; activeScreenSharerUserId: string | null } {
     const now = input.nowMs ?? Date.now();
@@ -486,6 +488,18 @@ export class RoomStateStore {
   ): CrosstalkInvitation | null {
     const room = this.rooms.get(this.toRoomKey(workspaceId, roomId));
     return room?.crosstalkInvitations.get(invitationId) ?? null;
+  }
+
+  createQuickTalkRoom(workspaceId: string, initiatorUserId: string, targetUserId: string): string {
+    const roomId = `quick-talk-${Date.now()}_${++quickTalkCounter}_${Math.random().toString(36).slice(2, 8)}`;
+    const roomKey = this.toRoomKey(workspaceId, roomId);
+    this.ensureRoom(roomKey);
+    this.quickTalkRooms.add(roomKey);
+    return roomId;
+  }
+
+  isQuickTalkRoom(workspaceId: string, roomId: string): boolean {
+    return this.quickTalkRooms.has(this.toRoomKey(workspaceId, roomId));
   }
 
   private removeUserFromCrosstalks(room: RoomState, userId: string): string[] {
