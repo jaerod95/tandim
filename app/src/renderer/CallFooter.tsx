@@ -1,4 +1,5 @@
 import { useCallContext } from "./CallContext";
+import { useCallShortcuts } from "./hooks/useCallShortcuts";
 import {
   Mic,
   MicOff,
@@ -10,6 +11,7 @@ import {
 
 export default function CallFooter() {
   const { session, engine } = useCallContext();
+  useCallShortcuts();
 
   return (
     <footer className="flex h-14 shrink-0 items-center justify-between border-t border-zinc-800 px-4">
