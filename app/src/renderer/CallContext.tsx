@@ -1,48 +1,69 @@
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
-  useMemo,
   useState,
   type PropsWithChildren,
-  type SetStateAction,
 } from "react";
 import type { CallSession } from "./types";
+import { useCallEngine, type UseCallEngineReturn } from "./hooks/useCallEngine";
 
 type CallContextValue = {
-  currentCall: CallSession | null;
-  setCurrentCall: (next: SetStateAction<CallSession | null>) => void;
-  refreshCurrentCall: () => Promise<void>;
+  session: CallSession | null;
+  isLoading: boolean;
+  error: string | null;
+  engine: UseCallEngineReturn;
 };
 
 const CallContext = createContext<CallContextValue | null>(null);
 
 function getSessionIdFromHash(hash: string): string | null {
   const query = hash.includes("?") ? hash.split("?")[1] : "";
-  if (!query) {
-    return null;
-  }
-
+  if (!query) return null;
   const sessionId = new URLSearchParams(query).get("sessionId");
   return sessionId && sessionId.length > 0 ? sessionId : null;
 }
 
 export function CallContextProvider({ children }: PropsWithChildren) {
-  const [currentCall, setCurrentCall] = useState<CallSession | null>(null);
+  const [session, setSession] = useState<CallSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const value = useMemo<CallContextValue>(
-    () => ({
-      currentCall,
-      isLoading,
-      error,
-      setCurrentCall,
-      refreshCurrentCall,
-    }),
-    [currentCall, error, isLoading, refreshCurrentCall],
-  );
+  useEffect(() => {
+    const sessionId = getSessionIdFromHash(window.location.hash);
+    if (!sessionId) {
+      setError("No session ID in URL");
+      setIsLoading(false);
+      return;
+    }
+
+    window.tandim?.getCallSession(sessionId).then((result) => {
+      if (result) {
+        setSession(result);
+      } else {
+        setError("Session not found");
+      }
+      setIsLoading(false);
+    });
+  }, []);
+
+  const engine = useCallEngine(session);
+
+  // Safety net: clean up if window is closed without unmounting
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      engine.leave();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [engine]);
+
+  const value: CallContextValue = {
+    session,
+    isLoading,
+    error,
+    engine,
+  };
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

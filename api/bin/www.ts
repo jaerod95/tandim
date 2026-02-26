@@ -1,9 +1,11 @@
 import http from "http";
 import createDebug from "debug";
 
-import app, { setDebugContext } from "../app";
+import app, { mountErrorHandlers } from "../app";
 import { createSignalServer } from "../services/signalServer";
 import { RoomStateStore } from "../services/roomState";
+import { createDebugRouter } from "../routes/debug";
+import { createRoomsRouter } from "../routes/api";
 
 const debug = createDebug("api:server");
 const port = normalizePort(process.env.PORT ?? "3000");
@@ -14,8 +16,21 @@ const server = http.createServer(app);
 const roomStateStore = new RoomStateStore();
 const io = createSignalServer(server, roomStateStore);
 
-// Set debug context for introspection
-setDebugContext({ roomStateStore, io });
+// Mount routes that require server context, then error handlers last
+app.use("/api/debug", createDebugRouter({ roomStateStore, io }));
+app.use("/api/rooms", createRoomsRouter(roomStateStore));
+mountErrorHandlers();
+
+// Prune inactive peers every 30 seconds
+setInterval(() => {
+  const removed = roomStateStore.pruneInactivePeers(60_000);
+  for (const { roomKey, userId } of removed) {
+    io.to(`${roomKey.workspaceId}:${roomKey.roomId}`).emit("signal:peer-left", {
+      userId,
+      activeScreenSharerUserId: null,
+    });
+  }
+}, 30_000);
 
 server.listen(port);
 server.on("error", onError);
