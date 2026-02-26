@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api-server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "api", "run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "electron-app",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "app", "run", "start"],
+      "port": 5173
+    }
+  ]
+}

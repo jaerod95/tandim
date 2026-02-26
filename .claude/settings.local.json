@@ -15,7 +15,19 @@
       "Bash(pkill:*)",
       "Bash(/Users/jrod/Documents/personal/tandim/app/test-simple.html:*)",
       "Bash(chmod:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(find /Users/jrod/Documents/personal/tandim -maxdepth 1 -name \"*.md\" -exec basename {} ;)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git add CLAUDE.md README.md SPEC.md ROADMAP.md AGENT_SETUP_COMPLETE.md BUILD_COMPLETE.md CAMERA_FIX_SUMMARY.md DEBUG_CHECKLIST.md FIXED_BUGS.md LOGGING_SETUP.md QUICKSTART.md RUNNING.md TESTING.md TESTING_MULTI_USER.md VIDEO_FIXES_FINAL.md)",
+      "Bash(git commit:*)",
+      "Bash(git merge claude/ecstatic-aryabhata --no-edit)",
+      "Bash(pnpm test)",
+      "Bash(python3 -m json.tool)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(npx vitest run)",
+      "Bash(git add api/app.ts api/bin/mcp.ts api/bin/www.ts api/routes/api.ts api/routes/debug.ts api/tests/api-routes.test.ts app/src/main.ts app/src/types.d.ts app/src/renderer/CallApp.tsx app/src/renderer/CallContext.tsx app/src/renderer/CallFooter.tsx app/src/renderer/CallHeader.tsx app/src/renderer/CallStage.tsx app/src/renderer/RemoteVideo.tsx app/src/renderer/Lobby/LobbyApp.tsx app/src/renderer/Lobby/LobbyContent.tsx app/src/renderer/Lobby/LobbyHeader.tsx app/src/renderer/Lobby/LobbyRightSidebar.tsx app/src/renderer/Lobby/LobbySidebar.tsx app/src/renderer/hooks/useCallEngine.ts app/src/webrtc/CallEngine.ts app/src/webrtc/PeerConnectionManager.ts app/src/presence.ts app/src/renderer/remoteLogger.ts app/src/webrtc/iceFallback.ts app/src/webrtc/meshState.ts app/src/webrtc/reconnect.ts)",
+      "Bash(git checkout main)"
     ]
   }
 }
