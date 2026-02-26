@@ -24,11 +24,15 @@ mountErrorHandlers();
 // Prune inactive peers every 30 seconds
 setInterval(() => {
   const removed = roomStateStore.pruneInactivePeers(60_000);
-  for (const { roomKey, userId } of removed) {
-    io.to(`${roomKey.workspaceId}:${roomKey.roomId}`).emit("signal:peer-left", {
+  for (const { roomKey, userId, endedCrosstalkIds } of removed) {
+    const channel = `${roomKey.workspaceId}:${roomKey.roomId}`;
+    io.to(channel).emit("signal:peer-left", {
       userId,
       activeScreenSharerUserId: null,
     });
+    for (const crosstalkId of endedCrosstalkIds) {
+      io.to(channel).emit("signal:crosstalk-ended", { crosstalkId });
+    }
   }
 }, 30_000);
 

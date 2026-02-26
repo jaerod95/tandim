@@ -48,7 +48,7 @@ describe("RoomStateStore", () => {
     });
 
     const removed = store.pruneInactivePeers(70, 200);
-    expect(removed).toEqual([{ roomKey: { workspaceId: "ws1", roomId: "room1" }, userId: "u1" }]);
+    expect(removed).toEqual([{ roomKey: { workspaceId: "ws1", roomId: "room1" }, userId: "u1", endedCrosstalkIds: [] }]);
     expect(store.getRoomPeerCount("ws1", "room1")).toBe(1);
   });
 

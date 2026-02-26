@@ -17,6 +17,18 @@ const relaySchema = z.object({
   payload: z.unknown()
 });
 
+const crosstalkStartSchema = z.object({
+  workspaceId: z.string().min(1),
+  roomId: z.string().min(1),
+  targetUserIds: z.array(z.string().min(1)).min(1)
+});
+
+const crosstalkEndSchema = z.object({
+  workspaceId: z.string().min(1),
+  roomId: z.string().min(1),
+  crosstalkId: z.string().min(1)
+});
+
 export function createSignalServer(httpServer: HttpServer, roomStateStore?: RoomStateStore): Server {
   const io = new Server(httpServer, {
     cors: { origin: "*" },
@@ -99,15 +111,95 @@ export function createSignalServer(httpServer: HttpServer, roomStateStore?: Room
       );
     });
 
+    socket.on("signal:crosstalk-start", (input: unknown) => {
+      const parsed = crosstalkStartSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_crosstalk_start_payload",
+          message: "Crosstalk start payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const { workspaceId, roomId, targetUserIds } = parsed.data;
+      const membership = rooms.getMembershipBySocket(socket.id);
+      if (!membership || membership.workspaceId !== workspaceId || membership.roomId !== roomId) {
+        socket.emit("signal:error", {
+          code: "not_in_room",
+          message: "You are not in this room",
+          retryable: false
+        });
+        return;
+      }
+
+      const result = rooms.startCrosstalk(workspaceId, roomId, membership.userId, targetUserIds);
+      if (!result.ok) {
+        socket.emit("signal:error", {
+          code: result.reason,
+          message: "Unable to start crosstalk",
+          retryable: false
+        });
+        return;
+      }
+
+      const channel = getChannel(workspaceId, roomId);
+      io.to(channel).emit("signal:crosstalk-started", {
+        crosstalkId: result.crosstalk.id,
+        initiatorUserId: result.crosstalk.initiatorUserId,
+        participantUserIds: Array.from(result.crosstalk.participantUserIds)
+      });
+    });
+
+    socket.on("signal:crosstalk-end", (input: unknown) => {
+      const parsed = crosstalkEndSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_crosstalk_end_payload",
+          message: "Crosstalk end payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const { workspaceId, roomId, crosstalkId } = parsed.data;
+      const membership = rooms.getMembershipBySocket(socket.id);
+      if (!membership || membership.workspaceId !== workspaceId || membership.roomId !== roomId) {
+        socket.emit("signal:error", {
+          code: "not_in_room",
+          message: "You are not in this room",
+          retryable: false
+        });
+        return;
+      }
+
+      const result = rooms.endCrosstalk(workspaceId, roomId, crosstalkId, membership.userId);
+      if (!result.ok) {
+        socket.emit("signal:error", {
+          code: result.reason,
+          message: "Unable to end crosstalk",
+          retryable: false
+        });
+        return;
+      }
+
+      const channel = getChannel(workspaceId, roomId);
+      io.to(channel).emit("signal:crosstalk-ended", { crosstalkId });
+    });
+
     socket.on("disconnect", () => {
       const result = rooms.leaveBySocket(socket.id);
       if (!result) {
         return;
       }
-      io.to(getChannel(result.roomKey.workspaceId, result.roomKey.roomId)).emit("signal:peer-left", {
+      const channel = getChannel(result.roomKey.workspaceId, result.roomKey.roomId);
+      io.to(channel).emit("signal:peer-left", {
         userId: result.userId,
         activeScreenSharerUserId: result.activeScreenSharerUserId
       });
+      for (const crosstalkId of result.endedCrosstalkIds) {
+        io.to(channel).emit("signal:crosstalk-ended", { crosstalkId });
+      }
     });
   });
 

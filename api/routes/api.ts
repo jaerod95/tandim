@@ -37,13 +37,18 @@ export function createRoomsRouter(roomStateStore: RoomStateStore): Router {
     const details = roomStateStore.getRoomDetails(workspaceId, roomId);
 
     if (!details) {
-      res.json({ peers: [], activeScreenSharerUserId: null });
+      res.json({ peers: [], activeScreenSharerUserId: null, crosstalks: [] });
       return;
     }
 
     res.json({
       peers: details.peers.map((p) => ({ userId: p.userId, displayName: p.displayName })),
       activeScreenSharerUserId: details.activeScreenSharerUserId,
+      crosstalks: details.crosstalks.map((ct) => ({
+        id: ct.id,
+        initiatorUserId: ct.initiatorUserId,
+        participantUserIds: Array.from(ct.participantUserIds),
+      })),
     });
   });
 
