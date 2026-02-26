@@ -165,6 +165,7 @@ export function createMCPServer(context: MCPServerContext) {
                     peerCount: peers.length,
                     peers,
                     activeScreenSharerUserId: roomDetails.activeScreenSharerUserId,
+                    crosstalks: roomDetails.crosstalks,
                   },
                   null,
                   2

@@ -17,6 +17,14 @@ const relaySchema = z.object({
   payload: z.unknown()
 });
 
+const crosstalkStartSchema = z.object({
+  targetUserIds: z.array(z.string().min(1)).min(1)
+});
+
+const crosstalkEndSchema = z.object({
+  crosstalkId: z.string().min(1)
+});
+
 export function createSignalServer(httpServer: HttpServer, roomStateStore?: RoomStateStore): Server {
   const io = new Server(httpServer, {
     cors: { origin: "*" },
@@ -47,11 +55,13 @@ export function createSignalServer(httpServer: HttpServer, roomStateStore?: Room
       });
       socket.join(getChannel(workspaceId, roomId));
 
+      const crosstalks = rooms.getCrosstalks(workspaceId, roomId);
       socket.emit("signal:joined", {
         workspaceId,
         roomId,
         peers: joined.roomPeers.map((peer) => ({ userId: peer.userId, displayName: peer.displayName })),
-        activeScreenSharerUserId: joined.activeScreenSharerUserId
+        activeScreenSharerUserId: joined.activeScreenSharerUserId,
+        crosstalks
       });
 
       socket.to(getChannel(workspaceId, roomId)).emit("signal:peer-joined", { userId, displayName });
@@ -99,12 +109,80 @@ export function createSignalServer(httpServer: HttpServer, roomStateStore?: Room
       );
     });
 
+    socket.on("signal:crosstalk-start", (input: unknown) => {
+      const parsed = crosstalkStartSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_crosstalk_payload",
+          message: "Crosstalk start payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const result = rooms.startCrosstalk(socket.id, parsed.data.targetUserIds);
+      if (!result.ok) {
+        socket.emit("signal:error", {
+          code: result.reason,
+          message: "Unable to start crosstalk",
+          retryable: result.reason !== "not_in_room"
+        });
+        return;
+      }
+
+      const channel = getChannel(result.roomKey.workspaceId, result.roomKey.roomId);
+
+      // Notify about any auto-ended crosstalks first
+      for (const endedId of result.autoLeftCrosstalkIds) {
+        io.to(channel).emit("signal:crosstalk-ended", { crosstalkId: endedId });
+      }
+
+      io.to(channel).emit("signal:crosstalk-started", {
+        crosstalk: result.crosstalk
+      });
+    });
+
+    socket.on("signal:crosstalk-end", (input: unknown) => {
+      const parsed = crosstalkEndSchema.safeParse(input);
+      if (!parsed.success) {
+        socket.emit("signal:error", {
+          code: "invalid_crosstalk_payload",
+          message: "Crosstalk end payload is invalid",
+          retryable: false
+        });
+        return;
+      }
+
+      const result = rooms.endCrosstalk(socket.id, parsed.data.crosstalkId);
+      if (!result.ok) {
+        socket.emit("signal:error", {
+          code: result.reason,
+          message: "Unable to end crosstalk",
+          retryable: false
+        });
+        return;
+      }
+
+      io.to(getChannel(result.roomKey.workspaceId, result.roomKey.roomId)).emit(
+        "signal:crosstalk-ended",
+        { crosstalkId: parsed.data.crosstalkId }
+      );
+    });
+
     socket.on("disconnect", () => {
       const result = rooms.leaveBySocket(socket.id);
       if (!result) {
         return;
       }
-      io.to(getChannel(result.roomKey.workspaceId, result.roomKey.roomId)).emit("signal:peer-left", {
+
+      const channel = getChannel(result.roomKey.workspaceId, result.roomKey.roomId);
+
+      // Notify about crosstalks ended due to disconnect
+      for (const crosstalkId of result.removedCrosstalkIds) {
+        io.to(channel).emit("signal:crosstalk-ended", { crosstalkId });
+      }
+
+      io.to(channel).emit("signal:peer-left", {
         userId: result.userId,
         activeScreenSharerUserId: result.activeScreenSharerUserId
       });

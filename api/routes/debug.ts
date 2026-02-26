@@ -57,6 +57,7 @@ export function createDebugRouter(context: DebugContext): Router {
       peerCount: peers.length,
       peers,
       activeScreenSharerUserId: roomDetails.activeScreenSharerUserId,
+      crosstalks: roomDetails.crosstalks,
     });
   });
 

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { CallEngine } from "@/webrtc/CallEngine";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CallEngine, type CrosstalkInfo } from "@/webrtc/CallEngine";
 import type { CallSession, SignalPeer, RemoteTile, PresenceEntry } from "@/renderer/types";
 
 export type UseCallEngineReturn = {
@@ -13,9 +13,13 @@ export type UseCallEngineReturn = {
   screenShareTile: RemoteTile | null;
   presence: PresenceEntry[];
   activeScreenSharerUserId: string | null;
+  activeCrosstalks: CrosstalkInfo[];
+  myCrosstalk: CrosstalkInfo | null;
   toggleMic: () => void;
   toggleCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
+  startCrosstalk: (targetUserIds: string[]) => void;
+  endCrosstalk: (crosstalkId: string) => void;
   leave: () => void;
 };
 
@@ -31,6 +35,7 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
   const [presence, setPresence] = useState<PresenceEntry[]>([]);
   const [activeScreenSharerUserId, setActiveScreenSharerUserId] = useState<string | null>(null);
   const [screenShareTile, setScreenShareTile] = useState<RemoteTile | null>(null);
+  const [activeCrosstalks, setActiveCrosstalks] = useState<CrosstalkInfo[]>([]);
   const tileVersionRef = useRef(0);
 
   useEffect(() => {
@@ -97,6 +102,9 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
       onLocalStream: (stream: MediaStream) => {
         setLocalStream(stream);
       },
+      onCrosstalksChanged: (crosstalks: CrosstalkInfo[]) => {
+        setActiveCrosstalks(crosstalks);
+      },
     });
 
     engineRef.current = engine;
@@ -136,6 +144,25 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     }
   }, []);
 
+  const startCrosstalk = useCallback((targetUserIds: string[]) => {
+    if (engineRef.current) {
+      engineRef.current.startCrosstalk(targetUserIds);
+    }
+  }, []);
+
+  const endCrosstalk = useCallback((crosstalkId: string) => {
+    if (engineRef.current) {
+      engineRef.current.endCrosstalk(crosstalkId);
+    }
+  }, []);
+
+  const myCrosstalk = useMemo(() => {
+    if (!session) return null;
+    return activeCrosstalks.find(
+      (ct) => ct.participantUserIds.includes(session.userId)
+    ) ?? null;
+  }, [activeCrosstalks, session]);
+
   return {
     status,
     joined,
@@ -147,9 +174,13 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     screenShareTile,
     presence,
     activeScreenSharerUserId,
+    activeCrosstalks,
+    myCrosstalk,
     toggleMic,
     toggleCamera,
     toggleScreenShare,
+    startCrosstalk,
+    endCrosstalk,
     leave,
   };
 }
