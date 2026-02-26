@@ -19,7 +19,7 @@ export type CallSession = {
   userId: string;
 };
 
-export type ActiveCrosstalk = {
+export type Crosstalk = {
   id: string;
   initiatorUserId: string;
   participantUserIds: string[];

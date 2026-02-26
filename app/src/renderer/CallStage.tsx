@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useCallContext } from "./CallContext";
 import { RemoteVideo } from "./RemoteVideo";
-import { Monitor, Maximize, Minimize, Expand, Shrink } from "lucide-react";
+import { Monitor, MessageSquare } from "lucide-react";
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from "@/components/ui/context-menu";
+import type { CrosstalkInfo } from "@/webrtc/CallEngine";
 
 function LocalVideoPreview({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -26,83 +33,26 @@ function LocalVideoPreview({ stream }: { stream: MediaStream }) {
 }
 
 function ScreenShareView({ stream, label }: { stream: MediaStream; label: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [objectFit, setObjectFit] = useState<"contain" | "cover">("contain");
-  const [showControls, setShowControls] = useState(false);
+  const ref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
+    if (ref.current) {
+      ref.current.srcObject = stream;
     }
   }, [stream]);
 
-  // Listen for fullscreen change (user may exit via Esc key)
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, []);
-
-  const toggleFullscreen = useCallback(async () => {
-    if (!containerRef.current) return;
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else {
-        await containerRef.current.requestFullscreen();
-      }
-    } catch (err) {
-      console.error("Fullscreen toggle failed:", err);
-    }
-  }, []);
-
-  const toggleFit = useCallback(() => {
-    setObjectFit((prev) => (prev === "contain" ? "cover" : "contain"));
-  }, []);
-
   return (
-    <div
-      ref={containerRef}
-      className="group relative flex-1 overflow-hidden rounded-lg bg-black"
-      onMouseEnter={() => setShowControls(true)}
-      onMouseLeave={() => setShowControls(false)}
-    >
+    <div className="relative flex-1 overflow-hidden rounded-lg bg-black">
       <video
-        ref={videoRef}
+        ref={ref}
         autoPlay
         playsInline
         muted={false}
-        className={`h-full w-full ${objectFit === "contain" ? "object-contain" : "object-cover"}`}
+        className="h-full w-full object-contain"
       />
-      {/* Label */}
       <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded bg-black/60 px-2 py-1 text-xs text-white">
         <Monitor className="h-3 w-3" />
         {label}&apos;s screen
-      </div>
-      {/* Viewer controls — appear on hover */}
-      <div
-        className={`absolute right-2 top-2 flex items-center gap-1 transition-opacity duration-200 ${
-          showControls ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <button
-          onClick={toggleFit}
-          className="flex h-8 w-8 items-center justify-center rounded bg-black/60 text-white transition-colors hover:bg-black/80"
-          title={objectFit === "contain" ? "Fill (crop to fit)" : "Fit (show all)"}
-        >
-          {objectFit === "contain" ? <Expand className="h-4 w-4" /> : <Shrink className="h-4 w-4" />}
-        </button>
-        <button
-          onClick={() => void toggleFullscreen()}
-          className="flex h-8 w-8 items-center justify-center rounded bg-black/60 text-white transition-colors hover:bg-black/80"
-          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-        >
-          {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-        </button>
       </div>
     </div>
   );
@@ -119,12 +69,73 @@ function EmptyStage() {
   );
 }
 
+function getCrosstalkVisualState(
+  userId: string,
+  activeCrosstalks: CrosstalkInfo[],
+): "in-crosstalk" | "outside-crosstalk" | "none" {
+  if (activeCrosstalks.length === 0) return "none";
+  const isInAnyCrosstalk = activeCrosstalks.some((ct) =>
+    ct.participantUserIds.includes(userId),
+  );
+  return isInAnyCrosstalk ? "in-crosstalk" : "outside-crosstalk";
+}
+
+function TileWithContextMenu({
+  userId,
+  displayName,
+  stream,
+  crosstalkState,
+  onStartCrosstalk,
+}: {
+  userId: string;
+  displayName: string;
+  stream: MediaStream;
+  crosstalkState: "in-crosstalk" | "outside-crosstalk" | "none";
+  onStartCrosstalk: (targetUserId: string) => void;
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div>
+          <RemoteVideo
+            label={displayName}
+            stream={stream}
+            crosstalkState={crosstalkState}
+          />
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => onStartCrosstalk(userId)}>
+          <MessageSquare className="h-4 w-4" />
+          Crosstalk with {displayName}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 export default function CallStage() {
   const { engine } = useCallContext();
 
-  const { remoteTiles, screenShareTile, localStream, cameraEnabled, activeScreenSharerUserId, screenSharing, sinkId } = engine;
+  const {
+    remoteTiles,
+    screenShareTile,
+    localStream,
+    cameraEnabled,
+    activeScreenSharerUserId,
+    screenSharing,
+    activeCrosstalks,
+    startCrosstalk,
+  } = engine;
 
-  // Screen share active — show focused layout
+  const handleStartCrosstalk = useCallback(
+    (targetUserId: string) => {
+      startCrosstalk([targetUserId]);
+    },
+    [startCrosstalk],
+  );
+
+  // Screen share active -- show focused layout
   if (activeScreenSharerUserId && screenShareTile) {
     return (
       <section className="relative flex flex-1 flex-col gap-3 overflow-hidden p-4">
@@ -137,7 +148,13 @@ export default function CallStage() {
           <div className="flex h-28 shrink-0 gap-2 overflow-x-auto">
             {remoteTiles.map((tile) => (
               <div key={tile.userId} className="h-full w-40 shrink-0">
-                <RemoteVideo label={tile.displayName} stream={tile.stream} sinkId={sinkId || undefined} />
+                <TileWithContextMenu
+                  userId={tile.userId}
+                  displayName={tile.displayName}
+                  stream={tile.stream}
+                  crosstalkState={getCrosstalkVisualState(tile.userId, activeCrosstalks)}
+                  onStartCrosstalk={handleStartCrosstalk}
+                />
               </div>
             ))}
           </div>
@@ -149,7 +166,7 @@ export default function CallStage() {
     );
   }
 
-  // Local user is sharing — show indicator + normal grid
+  // Local user is sharing -- show indicator + normal grid
   if (screenSharing) {
     return (
       <section className="relative flex flex-1 flex-col items-center justify-center gap-3 p-4">
@@ -164,11 +181,13 @@ export default function CallStage() {
             gridTemplateColumns: `repeat(${Math.min(remoteTiles.length, 3)}, minmax(0, 1fr))`,
           }}>
             {remoteTiles.map((tile) => (
-              <RemoteVideo
+              <TileWithContextMenu
                 key={tile.userId}
-                label={tile.displayName}
+                userId={tile.userId}
+                displayName={tile.displayName}
                 stream={tile.stream}
-                sinkId={sinkId || undefined}
+                crosstalkState={getCrosstalkVisualState(tile.userId, activeCrosstalks)}
+                onStartCrosstalk={handleStartCrosstalk}
               />
             ))}
           </div>
@@ -190,11 +209,13 @@ export default function CallStage() {
           gridTemplateColumns: `repeat(${Math.min(remoteTiles.length, 3)}, minmax(0, 1fr))`,
         }}>
           {remoteTiles.map((tile) => (
-            <RemoteVideo
+            <TileWithContextMenu
               key={tile.userId}
-              label={tile.displayName}
+              userId={tile.userId}
+              displayName={tile.displayName}
               stream={tile.stream}
-              sinkId={sinkId || undefined}
+              crosstalkState={getCrosstalkVisualState(tile.userId, activeCrosstalks)}
+              onStartCrosstalk={handleStartCrosstalk}
             />
           ))}
         </div>
