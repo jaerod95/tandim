@@ -14,7 +14,7 @@ export type DeepLinkRoute =
  *   tandim://workspace/<workspaceId>/room/<roomId> -> view-room (with workspace)
  *   tandim://workspace/<workspaceId>/join/<roomId> -> join-room (with workspace)
  */
-export function parseTandemDeepLink(input: string): DeepLinkRoute {
+export function parseTandimDeepLink(input: string): DeepLinkRoute {
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(input);

@@ -1,8 +1,17 @@
-import { app, BrowserWindow, ipcMain, globalShortcut, Menu, Tray, nativeImage, powerMonitor } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  globalShortcut,
+  Menu,
+  Tray,
+  nativeImage,
+  powerMonitor,
+} from "electron";
 import path from "node:path";
 import crypto from "node:crypto";
 import started from "electron-squirrel-startup";
-import { parseTandemDeepLink, type DeepLinkRoute } from "./deepLink";
+import { parseTandimDeepLink, type DeepLinkRoute } from "./deepLink";
 import { createTrayIcon, TrayStatus } from "./trayIcon";
 import { registerAutoUpdateIpc } from "./autoUpdater";
 
@@ -210,7 +219,10 @@ ipcMain.handle("deep-link:getPending", () => {
 
 // Backward compat: old renderer code may still call getPendingRoom
 ipcMain.handle("deep-link:getPendingRoom", () => {
-  if (pendingDeepLink?.type === "view-room" || pendingDeepLink?.type === "join-room") {
+  if (
+    pendingDeepLink?.type === "view-room" ||
+    pendingDeepLink?.type === "join-room"
+  ) {
     const roomId = pendingDeepLink.roomId;
     pendingDeepLink = null;
     return roomId;
@@ -254,7 +266,7 @@ function setDnd(enabled: boolean): void {
 app.setAsDefaultProtocolClient("tandim");
 
 app.on("open-url", (_event, url) => {
-  const parsed = parseTandemDeepLink(url);
+  const parsed = parseTandimDeepLink(url);
   handleDeepLink(parsed);
 });
 
@@ -306,7 +318,8 @@ app.on("ready", () => {
   startIdleDetection();
 
   // DND keyboard shortcut
-  const accelerator = process.platform === "darwin" ? "CommandOrControl+Shift+D" : "Ctrl+Shift+D";
+  const accelerator =
+    process.platform === "darwin" ? "CommandOrControl+Shift+D" : "Ctrl+Shift+D";
   globalShortcut.register(accelerator, () => {
     setDnd(!dndEnabled);
   });
