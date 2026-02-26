@@ -3,6 +3,7 @@
 ## Current State
 
 End-to-end MVP complete with Phase 1 stability work and Phase 2 server foundation:
+
 - API server with debug routes (factory pattern), heartbeat pruning, `/api/rooms` polling endpoints
 - Electron main process with IPC handlers for multi-window (lobby + call windows), deep link support
 - Lobby UI with room list (emoji + occupancy badges), team members, room detail panel with join flow
@@ -46,25 +47,24 @@ Focus: Implement the core differentiating feature.
 - [ ] Crosstalk invitation flow (pull someone in, they can accept/decline)
 - [ ] Multiple concurrent crosstalks in the same room
 
-## Phase 3: Feature Parity with Tandem
+## Phase 3: Getting it ready to distribute to friends
 
 Focus: Close the gap with Tandem's core features.
 
+- [ ] User profiles (display name, avatar, settings)
+- [ ] Authentication (JWT or session-based)
 - [ ] Persistent room definitions (name, emoji, order — stored on server)
 - [ ] Room creation/editing/deletion from the UI
-- [ ] User profiles (display name, avatar)
 - [ ] Idle detection (OS-level activity monitoring)
-- [ ] Do Not Disturb mode
 - [ ] Quick talk / tap-to-call on a specific person
 - [ ] Notification sounds (peer joined, someone talking to you)
-- [ ] Auto-join last room on app launch (optional)
 - [ ] Deep link improvements (workspace + room routing)
 
-## Phase 4: Deployment & Distribution
+## Phase 5: Deployment & Distribution
 
 Focus: Get it running for the team.
 
-- [ ] Authentication (JWT or session-based)
+- [ ] Do Not Disturb mode
 - [ ] Deploy API server to cloud (Fly.io, Railway, or similar)
 - [ ] HTTPS + WSS for production signaling
 - [ ] TURN server setup for peers behind restrictive NATs
