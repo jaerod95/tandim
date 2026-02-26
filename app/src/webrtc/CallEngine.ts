@@ -15,6 +15,7 @@ export type CallEngineCallbacks = {
   onJoined: (peers: SignalPeer[]) => void;
   onDisconnected: () => void;
   onLocalStream: (stream: MediaStream) => void;
+  onSinkIdChange?: (sinkId: string) => void;
 };
 
 export class CallEngine {
@@ -32,6 +33,7 @@ export class CallEngine {
   private _screenSharing = false;
   private _joined = false;
   private _activeScreenSharerUserId: string | null = null;
+  private _sinkId = "";
   private destroyed = false;
 
   constructor(
@@ -416,6 +418,82 @@ export class CallEngine {
     }
   }
 
+  async switchAudioDevice(deviceId: string): Promise<void> {
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: { exact: deviceId } },
+      });
+      const newTrack = newStream.getAudioTracks()[0];
+      if (!newTrack) return;
+
+      if (this.localStream) {
+        // Replace in the local stream
+        const oldTracks = this.localStream.getAudioTracks();
+        for (const old of oldTracks) {
+          this.localStream.removeTrack(old);
+          old.stop();
+        }
+        this.localStream.addTrack(newTrack);
+
+        // Preserve mute state
+        newTrack.enabled = this._micEnabled;
+
+        // Replace track in all peer connections (no renegotiation needed)
+        for (const pcm of this.peers.values()) {
+          const sender = pcm
+            .getSenders()
+            .find((s) => s.track?.kind === "audio");
+          if (sender) {
+            await pcm.replaceTrack(sender, newTrack);
+          }
+        }
+
+        this.callbacks.onLocalStream(this.localStream);
+      }
+    } catch (err) {
+      console.error("Failed to switch audio device:", err);
+    }
+  }
+
+  async switchVideoDevice(deviceId: string): Promise<void> {
+    if (!this._cameraEnabled || !this.localStream) return;
+
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: deviceId } },
+      });
+      const newTrack = newStream.getVideoTracks()[0];
+      if (!newTrack) return;
+
+      // Replace in the local stream
+      const oldTracks = this.localStream.getVideoTracks();
+      for (const old of oldTracks) {
+        this.localStream.removeTrack(old);
+        old.stop();
+      }
+      this.localStream.addTrack(newTrack);
+
+      // Replace track in all peer connections (no renegotiation needed)
+      for (const pcm of this.peers.values()) {
+        const sender = pcm
+          .getSenders()
+          .find((s) => s.track?.kind === "video");
+        if (sender) {
+          await pcm.replaceTrack(sender, newTrack);
+        }
+      }
+
+      this.callbacks.onLocalStream(this.localStream);
+    } catch (err) {
+      console.error("Failed to switch video device:", err);
+    }
+  }
+
+  setSinkId(deviceId: string): void {
+    this._sinkId = deviceId;
+    this.callbacks.onSinkIdChange?.(deviceId);
+  }
+
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
@@ -460,4 +538,5 @@ export class CallEngine {
   get cameraEnabled(): boolean { return this._cameraEnabled; }
   get screenSharing(): boolean { return this._screenSharing; }
   get joined(): boolean { return this._joined; }
+  get sinkId(): string { return this._sinkId; }
 }

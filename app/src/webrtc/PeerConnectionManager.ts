@@ -100,6 +100,10 @@ export class PeerConnectionManager {
     }
   }
 
+  getSenders(): RTCRtpSender[] {
+    return this.pc.getSenders();
+  }
+
   close(): void {
     this.pc.close();
   }
