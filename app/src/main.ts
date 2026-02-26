@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, Tray } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, Tray, powerMonitor } from "electron";
 import path from "node:path";
 import crypto from "node:crypto";
 import started from "electron-squirrel-startup";
@@ -200,11 +200,39 @@ app.on("open-url", (_event, url) => {
   }
 });
 
+// OS-level idle detection
+
+const IDLE_THRESHOLD_SECONDS = 300; // 5 minutes
+const IDLE_POLL_INTERVAL_MS = 15_000; // 15 seconds
+
+let isIdle = false;
+
+function broadcastIdleState(idle: boolean): void {
+  if (idle === isIdle) return;
+  isIdle = idle;
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("idle-state-changed", idle);
+  }
+}
+
+function startIdleDetection(): void {
+  setInterval(() => {
+    const idleSeconds = powerMonitor.getSystemIdleTime();
+    broadcastIdleState(idleSeconds >= IDLE_THRESHOLD_SECONDS);
+  }, IDLE_POLL_INTERVAL_MS);
+
+  powerMonitor.on("suspend", () => broadcastIdleState(true));
+  powerMonitor.on("resume", () => broadcastIdleState(false));
+  powerMonitor.on("lock-screen", () => broadcastIdleState(true));
+  powerMonitor.on("unlock-screen", () => broadcastIdleState(false));
+}
+
 // App lifecycle
 
 app.on("ready", () => {
   tray = createTray();
   mainWindow = createLobbyWindow();
+  startIdleDetection();
 });
 
 app.on("before-quit", () => {

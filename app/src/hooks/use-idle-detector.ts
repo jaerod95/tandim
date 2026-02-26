@@ -1,54 +1,31 @@
 import { useEffect, useRef } from "react";
 
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
 type UseIdleDetectorOptions = {
   onIdle: () => void;
   onActive: () => void;
-  timeoutMs?: number;
 };
 
-export function useIdleDetector({
-  onIdle,
-  onActive,
-  timeoutMs = IDLE_TIMEOUT_MS,
-}: UseIdleDetectorOptions): void {
-  const isIdleRef = useRef(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+/**
+ * Listens for OS-level idle state changes from the Electron main process
+ * via powerMonitor. Falls back to a no-op if the IPC bridge is unavailable
+ * (e.g., in a browser or test environment).
+ */
+export function useIdleDetector({ onIdle, onActive }: UseIdleDetectorOptions): void {
+  const onIdleRef = useRef(onIdle);
+  const onActiveRef = useRef(onActive);
 
   useEffect(() => {
-    const resetTimer = () => {
-      if (isIdleRef.current) {
-        isIdleRef.current = false;
-        onActive();
+    onIdleRef.current = onIdle;
+    onActiveRef.current = onActive;
+  }, [onIdle, onActive]);
+
+  useEffect(() => {
+    window.tandim?.onIdleStateChanged((isIdle) => {
+      if (isIdle) {
+        onIdleRef.current();
+      } else {
+        onActiveRef.current();
       }
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        isIdleRef.current = true;
-        onIdle();
-      }, timeoutMs);
-    };
-
-    const events: Array<keyof WindowEventMap> = [
-      "mousemove",
-      "mousedown",
-      "keydown",
-      "scroll",
-      "touchstart",
-    ];
-
-    for (const event of events) {
-      window.addEventListener(event, resetTimer, { passive: true });
-    }
-
-    // Start the initial timer
-    resetTimer();
-
-    return () => {
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-      for (const event of events) {
-        window.removeEventListener(event, resetTimer);
-      }
-    };
-  }, [onIdle, onActive, timeoutMs]);
+    });
+  }, []);
 }

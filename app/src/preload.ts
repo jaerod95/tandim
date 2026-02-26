@@ -30,6 +30,11 @@ const api = {
   setTrayStatus: (status: TrayStatus): void => {
     ipcRenderer.send("tray:setStatus", status);
   },
+  onIdleStateChanged: (callback: (isIdle: boolean) => void): void => {
+    ipcRenderer.on("idle-state-changed", (_event, isIdle: boolean) =>
+      callback(isIdle),
+    );
+  },
 };
 
 contextBridge.exposeInMainWorld("tandim", api);

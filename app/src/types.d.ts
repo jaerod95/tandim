@@ -18,6 +18,7 @@ type TandimBridge = {
     userId: string;
   } | null>;
   setTrayStatus: (status: TrayStatus) => void;
+  onIdleStateChanged: (callback: (isIdle: boolean) => void) => void;
 };
 
 declare global {
