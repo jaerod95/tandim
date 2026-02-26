@@ -45,7 +45,7 @@ Focus: Implement the core differentiating feature.
 - [x] Crosstalk volume slider for outside conversations (CrosstalkControls component)
 - [x] Visual indicators in call UI (blue ring on participants, dimmed outsiders, header banner)
 - [x] Multiple concurrent crosstalks in the same room (auto-leave old crosstalk)
-- [ ] Crosstalk invitation flow (pull someone in, they can accept/decline)
+- [x] Crosstalk invitation flow (pull someone in, they can accept/decline)
 
 ## Phase 3: Getting it ready to distribute to friends
 
@@ -55,13 +55,14 @@ Focus: Close the gap with Tandem's core features.
 - [ ] Authentication (JWT or session-based)
 - [ ] Persistent room definitions (name, emoji, order — stored on server)
 - [ ] Room creation/editing/deletion from the UI
-- [ ] Idle detection (OS-level activity monitoring)
+- [x] Idle detection (OS-level activity monitoring)
 - [ ] Quick talk / tap-to-call on a specific person
-- [ ] Notification sounds (peer joined, someone talking to you)
+- [x] Notification sounds (peer joined, someone talking to you)
 - [ ] Deep link improvements (workspace + room routing)
-- [ ] Make a custom logo for the app and update the electron app icons
-- [ ] Add some basic branding to make it feel like an app
+- [x] Make a custom logo for the app and update the electron app icons
+- [x] Add some basic branding to make it feel like an app
 - [ ] Bugfix: Fix join without audio button when joining a room from the lobby so the mic is set to muted
+- [x] Do Not Disturb mode
 
 ## Phase 5: Deployment & Distribution
 
