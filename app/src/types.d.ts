@@ -19,7 +19,7 @@ type TandimBridge = {
 
 declare global {
   interface Window {
-    tandem?: TandimBridge;
+    tandim?: TandimBridge;
   }
 }
 

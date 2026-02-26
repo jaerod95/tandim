@@ -6,26 +6,29 @@
  */
 
 import { Router } from "express";
+import type { Server } from "socket.io";
+import type { RoomStateStore } from "../services/roomState";
 import fs from "fs";
 import path from "path";
 
+export type DebugContext = {
+  roomStateStore: RoomStateStore;
+  io: Server;
+};
 
-const router = Router();
+export function createDebugRouter(context: DebugContext): Router {
+  const router = Router();
 
-
-  // Ensure logs directory exists
   const logsDir = path.join(process.cwd(), "logs");
   if (!fs.existsSync(logsDir)) {
     fs.mkdirSync(logsDir, { recursive: true });
   }
 
-  // Get all rooms
   router.get("/rooms", (_req, res) => {
     const roomList = context.roomStateStore.getAllRooms();
     res.json({ rooms: roomList });
   });
 
-  // Get specific room details
   router.get("/rooms/:workspaceId/:roomId", (req, res) => {
     const { workspaceId, roomId } = req.params;
     const roomDetails = context.roomStateStore.getRoomDetails(workspaceId, roomId);
@@ -57,7 +60,6 @@ const router = Router();
     });
   });
 
-  // Get socket information
   router.get("/sockets", async (_req, res) => {
     const sockets = await context.io.fetchSockets();
     const socketInfo = sockets.map((socket) => ({
@@ -68,7 +70,6 @@ const router = Router();
     res.json({ sockets: socketInfo });
   });
 
-  // Get peer by socket ID
   router.get("/sockets/:socketId", (req, res) => {
     const { socketId } = req.params;
     const membership = context.roomStateStore.getMembershipBySocket(socketId);
@@ -85,7 +86,6 @@ const router = Router();
     res.json(membership);
   });
 
-  // Get server statistics
   router.get("/stats", async (_req, res) => {
     const rooms = context.roomStateStore.getAllRooms();
     const sockets = await context.io.fetchSockets();
@@ -102,7 +102,6 @@ const router = Router();
     res.json(stats);
   });
 
-  // Health check
   router.get("/health", (_req, res) => {
     res.json({
       status: "healthy",
@@ -111,7 +110,6 @@ const router = Router();
     });
   });
 
-  // Simulate peer disconnect (for testing)
   router.post("/simulate/disconnect/:socketId", async (req, res) => {
     const { socketId } = req.params;
     const sockets = await context.io.fetchSockets();
@@ -130,7 +128,6 @@ const router = Router();
     res.json({ success: true, socketId });
   });
 
-  // Remote logging endpoint
   router.post("/log", (req, res) => {
     const { logs } = req.body;
 
@@ -144,7 +141,7 @@ const router = Router();
         const { source, level, message, timestamp, data } = log;
 
         if (!source || !level || !message) {
-          continue; // Skip invalid logs
+          continue;
         }
 
         const logFile = path.join(logsDir, `${source}.log`);
@@ -162,4 +159,5 @@ const router = Router();
     }
   });
 
-export default router;
+  return router;
+}

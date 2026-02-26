@@ -3,7 +3,6 @@ import cookieParser from "cookie-parser";
 import logger from "morgan";
 
 import apiRouter from "./routes/api";
-import debugRouter from "./routes/debug";
 import slackRouter from "./routes/slack";
 
 const app = express();
@@ -37,24 +36,28 @@ app.use(
 app.use(cookieParser());
 
 app.use("/api", apiRouter);
-app.use('/api/debug', debugRouter);
-app.use('/api/slack', slackRouter);
+app.use("/api/slack", slackRouter);
 
-// Error handling
-app.use("/api/*", (_req, res) => {
-  res.status(404).json({
-    code: "not_found",
-    message: "API route not found",
-    retryable: false
-  });
-});
+// Debug and rooms routes are mounted in the entrypoint (www.ts / mcp.ts)
+// after the signal server context is available. Error handlers must be
+// mounted last — call mountErrorHandlers() after all dynamic routes.
 
-app.use((_req, res) => {
-  res.status(404).json({
-    code: "not_found",
-    message: "Route not found",
-    retryable: false
+export function mountErrorHandlers(): void {
+  app.use("/api/*", (_req, res) => {
+    res.status(404).json({
+      code: "not_found",
+      message: "API route not found",
+      retryable: false
+    });
   });
-});
+
+  app.use((_req, res) => {
+    res.status(404).json({
+      code: "not_found",
+      message: "Route not found",
+      retryable: false
+    });
+  });
+}
 
 export default app;

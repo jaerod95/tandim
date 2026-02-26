@@ -1,6 +1,10 @@
 import request from "supertest";
-import { describe, expect, it } from "vitest";
-import app from "../app";
+import { describe, expect, it, beforeAll } from "vitest";
+import app, { mountErrorHandlers } from "../app";
+
+beforeAll(() => {
+  mountErrorHandlers();
+});
 
 describe("api routing contract", () => {
   it("returns 200 for GET /api/health", async () => {

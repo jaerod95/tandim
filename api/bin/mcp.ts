@@ -7,10 +7,12 @@
  */
 
 import http from "http";
-import app, { setDebugContext } from "../app";
+import app, { mountErrorHandlers } from "../app";
 import { createSignalServer } from "../services/signalServer";
 import { RoomStateStore } from "../services/roomState";
 import { startMCPServer } from "../mcp-server";
+import { createDebugRouter } from "../routes/debug";
+import { createRoomsRouter } from "../routes/api";
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
 
@@ -20,8 +22,10 @@ const server = http.createServer(app);
 const roomStateStore = new RoomStateStore();
 const io = createSignalServer(server, roomStateStore);
 
-// Set debug context
-setDebugContext({ roomStateStore, io });
+// Mount routes that require server context, then error handlers last
+app.use("/api/debug", createDebugRouter({ roomStateStore, io }));
+app.use("/api/rooms", createRoomsRouter(roomStateStore));
+mountErrorHandlers();
 
 // Start HTTP server
 server.listen(port, () => {

@@ -1,111 +1,56 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type RemoteVideoProps = {
   label: string;
   stream: MediaStream;
 };
 
-export function RemoteVideo(props: RemoteVideoProps) {
+export function RemoteVideo({ label, stream }: RemoteVideoProps) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const [hasVideo, setHasVideo] = useState(false);
 
   useEffect(() => {
-    // Update hasVideo state when stream changes
-    setHasVideo(props.stream?.getVideoTracks().length > 0);
-  }, [props.stream]);
+    setHasVideo(stream?.getVideoTracks().length > 0);
+  }, [stream]);
 
   useEffect(() => {
     const videoEl = ref.current;
-    if (!videoEl || !props.stream) return;
+    if (!videoEl || !stream) return;
 
-    console.log(`RemoteVideo: Setting stream for ${props.label}`);
-    console.log(`  - Stream ID: ${props.stream.id}`);
-    console.log(`  - Stream active: ${props.stream.active}`);
-    console.log(`  - Audio tracks: ${props.stream.getAudioTracks().length}`);
-    console.log(`  - Video tracks: ${props.stream.getVideoTracks().length}`);
+    videoEl.srcObject = stream;
 
-    const videoTracks = props.stream.getVideoTracks();
-    if (videoTracks.length > 0) {
-      const track = videoTracks[0];
-      console.log(`  - Video track ID: ${track.id}`);
-      console.log(`  - Video track enabled: ${track.enabled}`);
-      console.log(`  - Video track readyState: ${track.readyState}`);
-      console.log(`  - Video track muted: ${track.muted}`);
-    } else {
-      console.warn(
-        `RemoteVideo: No video tracks in stream for ${props.label}!`,
-      );
-    }
-
-    // Always set srcObject, even if no video tracks yet
-    videoEl.srcObject = props.stream;
-
-    // Listen for tracks being added to the stream
     const handleAddTrack = (event: MediaStreamTrackEvent) => {
-      console.log(
-        `RemoteVideo: Track added to stream for ${props.label}: ${event.track.kind}`,
-      );
       if (event.track.kind === "video") {
-        console.log(`RemoteVideo: Video track added! ID: ${event.track.id}`);
         setHasVideo(true);
-        // Force video element to reload
         videoEl.load();
       }
     };
 
-    // Listen for tracks being removed
     const handleRemoveTrack = (event: MediaStreamTrackEvent) => {
-      console.log(
-        `RemoteVideo: Track removed from stream for ${props.label}: ${event.track.kind}`,
-      );
       if (event.track.kind === "video") {
-        console.log(`RemoteVideo: Video track removed!`);
         setHasVideo(false);
       }
     };
 
-    props.stream.addEventListener("addtrack", handleAddTrack);
-    props.stream.addEventListener("removetrack", handleRemoveTrack);
-
-    // Log when video starts playing
-    const handleLoadedMetadata = () => {
-      console.log(`RemoteVideo: Metadata loaded for ${props.label}`);
-      console.log(
-        `  - Video dimensions: ${videoEl.videoWidth}x${videoEl.videoHeight}`,
-      );
-      console.log(`  - Current tracks: ${props.stream.getTracks().length}`);
-    };
-
-    const handlePlay = () => {
-      console.log(`RemoteVideo: Video playing for ${props.label}`);
-    };
-
-    const handleError = (e: Event) => {
-      console.error(`RemoteVideo: Video error for ${props.label}:`, e);
-    };
-
-    videoEl.addEventListener("loadedmetadata", handleLoadedMetadata);
-    videoEl.addEventListener("play", handlePlay);
-    videoEl.addEventListener("error", handleError);
+    stream.addEventListener("addtrack", handleAddTrack);
+    stream.addEventListener("removetrack", handleRemoveTrack);
 
     return () => {
-      props.stream.removeEventListener("addtrack", handleAddTrack);
-      props.stream.removeEventListener("removetrack", handleRemoveTrack);
-      videoEl.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      videoEl.removeEventListener("play", handlePlay);
-      videoEl.removeEventListener("error", handleError);
+      stream.removeEventListener("addtrack", handleAddTrack);
+      stream.removeEventListener("removetrack", handleRemoveTrack);
     };
-  }, [props.stream, props.label]);
+  }, [stream, label]);
+
+  const initials = label.charAt(0).toUpperCase();
 
   return (
-    <article className="tile">
-      <h2>{props.label}</h2>
+    <article className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-zinc-800">
       {!hasVideo && (
-        <div className="video-placeholder">
-          <div className="avatar-large">
-            {props.label.charAt(0).toUpperCase()}
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-700 text-xl font-medium text-zinc-300">
+            {initials}
           </div>
-          <p>{props.label}</p>
+          <span className="text-xs text-zinc-400">{label}</span>
         </div>
       )}
       <video
@@ -113,8 +58,12 @@ export function RemoteVideo(props: RemoteVideoProps) {
         autoPlay
         playsInline
         muted={false}
+        className="h-full w-full object-cover"
         style={{ display: hasVideo ? "block" : "none" }}
       />
+      <div className="absolute bottom-2 left-2 rounded bg-black/50 px-1.5 py-0.5 text-xs text-white">
+        {label}
+      </div>
     </article>
   );
 }
