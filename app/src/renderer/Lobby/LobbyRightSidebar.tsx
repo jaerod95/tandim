@@ -1,12 +1,17 @@
-import { X, LogIn, Headphones } from "lucide-react";
+import { useState } from "react";
+import { X, LogIn, Headphones, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { EditRoomDialog } from "@/renderer/Lobby/EditRoomDialog";
+import { DeleteRoomDialog } from "@/renderer/Lobby/DeleteRoomDialog";
+import type { Room } from "@/renderer/types";
 
 type LobbyRightSidebarProps = {
-  room: { name: string; emoji: string } | null;
+  room: Room | null;
   participants: Array<{ userId: string; displayName: string }>;
   onJoin: (options: { audioEnabled: boolean }) => void;
   onClose: () => void;
+  onRefreshRooms: () => void;
 };
 
 export function LobbyRightSidebar({
@@ -14,7 +19,11 @@ export function LobbyRightSidebar({
   participants,
   onJoin,
   onClose,
+  onRefreshRooms,
 }: LobbyRightSidebarProps) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
   if (!room) return null;
 
   return (
@@ -23,9 +32,27 @@ export function LobbyRightSidebar({
         <h2 className="text-sm font-semibold">
           {room.emoji} {room.name}
         </h2>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            title="Edit room"
+            onClick={() => setEditOpen(true)}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            title="Delete room"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <Separator />
@@ -64,6 +91,23 @@ export function LobbyRightSidebar({
           </ul>
         )}
       </div>
+
+      <EditRoomDialog
+        room={room}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onUpdated={onRefreshRooms}
+      />
+
+      <DeleteRoomDialog
+        room={room}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => {
+          onClose();
+          onRefreshRooms();
+        }}
+      />
     </aside>
   );
 }

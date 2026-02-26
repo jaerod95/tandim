@@ -1,3 +1,6 @@
+import { Phone } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PresenceStatus, UserPresence } from "@/hooks/use-presence";
 import { ROOMS } from "@/renderer/types";
 
@@ -5,6 +8,7 @@ type LobbyContentProps = {
   displayName: string;
   userId: string;
   users: UserPresence[];
+  onQuickTalk?: (targetUserId: string) => void;
 };
 
 const STATUS_DOT_COLORS: Record<PresenceStatus, string> = {
@@ -48,7 +52,11 @@ function RoomLabel({ room }: { room: { workspaceId: string; roomId: string } }) 
   return <span className="text-xs text-muted-foreground">{label}</span>;
 }
 
-export function LobbyContent({ displayName, userId, users }: LobbyContentProps) {
+function canQuickTalk(status: PresenceStatus): boolean {
+  return status === "available" || status === "idle";
+}
+
+export function LobbyContent({ displayName, userId, users, onQuickTalk }: LobbyContentProps) {
   // Sort: "you" first, then by display name
   const sorted = [...users].sort((a, b) => {
     if (a.userId === userId) return -1;
@@ -67,10 +75,11 @@ export function LobbyContent({ displayName, userId, users }: LobbyContentProps) 
         <ul className="space-y-1">
           {sorted.map((user) => {
             const isYou = user.userId === userId;
+            const showCallButton = !isYou && canQuickTalk(user.status) && onQuickTalk;
             return (
               <li
                 key={user.userId}
-                className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent"
+                className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent"
               >
                 <Initials name={user.displayName} />
                 <div className="flex flex-1 flex-col gap-0.5">
@@ -89,7 +98,25 @@ export function LobbyContent({ displayName, userId, users }: LobbyContentProps) 
                     </span>
                   )}
                 </div>
-                <StatusDot status={user.status} />
+                {showCallButton ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+                        onClick={() => onQuickTalk(user.userId)}
+                      >
+                        <Phone className="h-4 w-4 text-green-400" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      <p>Quick talk with {user.displayName}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <StatusDot status={user.status} />
+                )}
               </li>
             );
           })}

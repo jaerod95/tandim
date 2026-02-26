@@ -1,17 +1,18 @@
+import { Settings, BellOff, Bell } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { BellOff, Bell } from "lucide-react";
 import { TandimLogo } from "@/components/TandimLogo";
 
 type LobbyHeaderProps = {
   title: string;
   dndActive: boolean;
   onToggleDnd: () => void;
+  onOpenSettings?: () => void;
 };
 
-export function LobbyHeader({ title, dndActive, onToggleDnd }: LobbyHeaderProps) {
+export function LobbyHeader({ title, dndActive, onToggleDnd, onOpenSettings }: LobbyHeaderProps) {
   const showLogo = title === "Tandim";
 
   return (
@@ -47,6 +48,17 @@ export function LobbyHeader({ title, dndActive, onToggleDnd }: LobbyHeaderProps)
             {dndActive ? "Turn off Do Not Disturb" : "Do Not Disturb"}
           </TooltipContent>
         </Tooltip>
+        {onOpenSettings && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={onOpenSettings}
+            aria-label="Open settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </header>
   );
