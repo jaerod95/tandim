@@ -36,6 +36,9 @@ export class CallEngine {
   private _sinkId = "";
   private destroyed = false;
 
+  /** Set of peerIds that were already in the room when we joined */
+  private existingPeerIds = new Set<string>();
+
   constructor(
     private session: CallSession,
     private callbacks: CallEngineCallbacks,
@@ -81,12 +84,14 @@ export class CallEngine {
 
       // On reconnect, close stale peer connections before re-joining
       if (this.peers.size > 0) {
+        console.log("[WebRTC] Socket reconnected, clearing stale peers");
         for (const pcm of this.peers.values()) {
           pcm.close();
         }
         this.peers.clear();
         this.remoteStreams.clear();
         this.remoteScreenStreams.clear();
+        this.existingPeerIds.clear();
       }
 
       this.callbacks.onStatusChange("Connecting...");
@@ -125,7 +130,16 @@ export class CallEngine {
       this.callbacks.onJoined(data.peers);
       this.startHeartbeat();
 
-      // Create peer connections for existing peers (we are the offerer)
+      // Track which peers were already in the room — we are impolite to them
+      // (we will be the offerer; they wait for our offer).
+      this.existingPeerIds.clear();
+      for (const peer of data.peers) {
+        if (peer.userId !== this.session.userId) {
+          this.existingPeerIds.add(peer.userId);
+        }
+      }
+
+      // Create peer connections for existing peers (we are the offerer → impolite)
       for (const peer of data.peers) {
         if (peer.userId !== this.session.userId) {
           this.ensurePeerConnection(peer.userId);
@@ -141,12 +155,15 @@ export class CallEngine {
     this.socket.on("signal:peer-joined", (data: SignalPeer) => {
       if (this.destroyed) return;
       this.callbacks.onPeerJoined(data);
-      // New peer arrived — they will send us offers, we don't need to initiate
+      // New peer arrived after us — they will send offers, we are polite.
+      // Don't add to existingPeerIds; ensurePeerConnection will see they're
+      // NOT in existingPeerIds and mark us as polite for this peer.
     });
 
     this.socket.on("signal:peer-left", (data: { userId: string; activeScreenSharerUserId: string | null }) => {
       if (this.destroyed) return;
       this.removePeer(data.userId);
+      this.existingPeerIds.delete(data.userId);
       this.callbacks.onPeerLeft(data.userId);
       if (!data.activeScreenSharerUserId && this._activeScreenSharerUserId) {
         this._activeScreenSharerUserId = null;
@@ -162,14 +179,17 @@ export class CallEngine {
       const pcm = this.ensurePeerConnection(data.fromUserId);
       try {
         const answer = await pcm.handleOffer(data.payload);
-        this.socket!.emit("signal:answer", {
-          workspaceId: this.session.workspaceId,
-          roomId: this.session.roomId,
-          toUserId: data.fromUserId,
-          payload: answer,
-        });
+        if (answer) {
+          this.socket!.emit("signal:answer", {
+            workspaceId: this.session.workspaceId,
+            roomId: this.session.roomId,
+            toUserId: data.fromUserId,
+            payload: answer,
+          });
+        }
+        // answer === null means offer was ignored (impolite glare resolution)
       } catch (err) {
-        console.error(`Failed to handle offer from ${data.fromUserId}:`, err);
+        console.error(`[WebRTC] Failed to handle offer from ${data.fromUserId}:`, err);
       }
     });
 
@@ -183,7 +203,7 @@ export class CallEngine {
         try {
           await pcm.handleAnswer(data.payload);
         } catch (err) {
-          console.error(`Failed to handle answer from ${data.fromUserId}:`, err);
+          console.error(`[WebRTC] Failed to handle answer from ${data.fromUserId}:`, err);
         }
       }
     });
@@ -198,7 +218,7 @@ export class CallEngine {
         try {
           await pcm.handleIceCandidate(data.payload);
         } catch (err) {
-          console.error(`Failed to add ICE candidate from ${data.fromUserId}:`, err);
+          console.error(`[WebRTC] Failed to add ICE candidate from ${data.fromUserId}:`, err);
         }
       }
     });
@@ -221,13 +241,23 @@ export class CallEngine {
     });
 
     this.socket.on("signal:error", (data: { code: string; message: string }) => {
-      console.error(`Signal error: ${data.code} - ${data.message}`);
+      console.error(`[WebRTC] Signal error: ${data.code} - ${data.message}`);
     });
   }
 
   private ensurePeerConnection(peerId: string): PeerConnectionManager {
     let pcm = this.peers.get(peerId);
     if (pcm) return pcm;
+
+    // Determine politeness:
+    // - Peers that were already in the room when we joined are in existingPeerIds.
+    //   We are the offerer for those, so we are IMPOLITE (polite = false).
+    // - Peers that joined after us are NOT in existingPeerIds.
+    //   They will send us offers, so we are POLITE (polite = true).
+    const polite = !this.existingPeerIds.has(peerId);
+    console.log(
+      `[WebRTC] Creating peer connection for ${peerId} (we are ${polite ? "polite" : "impolite"})`,
+    );
 
     pcm = new PeerConnectionManager(peerId, this.iceConfig, {
       onIceCandidate: (candidate) => {
@@ -263,10 +293,22 @@ export class CallEngine {
         }
       },
       onConnectionStateChange: (state) => {
-        console.log(`[Peer:${peerId}] connection state: ${state}`);
+        console.log(`[WebRTC] Peer ${peerId} connection state: ${state}`);
+        if (state === "connected") {
+          // Connection recovered — reset ICE restart counter
+          const peerPcm = this.peers.get(peerId);
+          peerPcm?.resetIceRestartCount();
+        }
         if (state === "failed" || state === "closed") {
-          this.remoteStreams.delete(peerId);
-          this.callbacks.onRemoteStreamRemoved(peerId);
+          // ICE restart is handled inside PeerConnectionManager (attemptIceRestart).
+          // Only remove the stream on "closed" (permanent) or when ICE restarts
+          // have been exhausted (which manifests as the connection staying "failed").
+          // We keep the stream around during ICE restart attempts so the UI
+          // doesn't flicker.
+          if (state === "closed") {
+            this.remoteStreams.delete(peerId);
+            this.callbacks.onRemoteStreamRemoved(peerId);
+          }
         }
       },
       onNegotiationNeeded: (offer) => {
@@ -277,7 +319,16 @@ export class CallEngine {
           payload: offer,
         });
       },
-    });
+      onIceRestart: (offer) => {
+        console.log(`[WebRTC] Sending ICE restart offer to ${peerId}`);
+        this.socket?.emit("signal:offer", {
+          workspaceId: this.session.workspaceId,
+          roomId: this.session.roomId,
+          toUserId: peerId,
+          payload: offer,
+        });
+      },
+    }, polite);
 
     // Add local tracks to the connection
     if (this.localStream) {
@@ -322,13 +373,16 @@ export class CallEngine {
 
   async toggleCamera(): Promise<boolean> {
     if (this._cameraEnabled) {
-      // Turn off camera
+      // Turn off camera — remove video tracks from local stream and peer connections
       if (this.localStream) {
         for (const track of this.localStream.getVideoTracks()) {
           track.stop();
           this.localStream.removeTrack(track);
         }
       }
+      // onnegotiationneeded fires automatically on each peer connection when
+      // senders are affected by removeTrack on the underlying stream.
+      // The makingOffer guard + perfect negotiation ensures no races.
       this._cameraEnabled = false;
     } else {
       // Turn on camera
@@ -337,14 +391,15 @@ export class CallEngine {
         const videoTrack = videoStream.getVideoTracks()[0];
         if (this.localStream && videoTrack) {
           this.localStream.addTrack(videoTrack);
-          // Add to all peer connections
+          // Add to all peer connections — this triggers onnegotiationneeded
+          // on each PCM which will create and send a new offer.
           for (const pcm of this.peers.values()) {
             pcm.addTrack(videoTrack, this.localStream);
           }
         }
         this._cameraEnabled = true;
       } catch (err) {
-        console.error("Failed to enable camera:", err);
+        console.error("[WebRTC] Failed to enable camera:", err);
       }
     }
     if (this.localStream) {
@@ -374,7 +429,7 @@ export class CallEngine {
         this.stopScreenShare();
       };
 
-      // Add screen track to all peer connections
+      // Add screen track to all peer connections — triggers onnegotiationneeded
       this.screenSenders = [];
       for (const pcm of this.peers.values()) {
         const sender = pcm.addTrack(videoTrack, this.screenStream);
@@ -385,7 +440,7 @@ export class CallEngine {
       this._screenSharing = true;
       return true;
     } catch (err) {
-      console.error("Failed to start screen share:", err);
+      console.error("[WebRTC] Failed to start screen share:", err);
       return false;
     }
   }
@@ -398,7 +453,7 @@ export class CallEngine {
       this.screenStream = null;
     }
 
-    // Remove senders from peer connections
+    // Remove senders from peer connections — triggers onnegotiationneeded
     for (const sender of this.screenSenders) {
       try {
         for (const pcm of this.peers.values()) {
@@ -518,6 +573,7 @@ export class CallEngine {
     }
     this.peers.clear();
     this.remoteStreams.clear();
+    this.existingPeerIds.clear();
 
     if (this.localStream) {
       for (const track of this.localStream.getTracks()) {
