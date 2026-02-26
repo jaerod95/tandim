@@ -53,7 +53,7 @@ export class CallEngine {
       // Use default STUN
     }
 
-    // Get local audio
+    // Get local audio (continue in listen-only mode if denied)
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
@@ -62,8 +62,8 @@ export class CallEngine {
       this.callbacks.onLocalStream(this.localStream);
     } catch (err) {
       console.error("Failed to get local media:", err);
-      this.callbacks.onStatusChange("Microphone access denied");
-      return;
+      this.callbacks.onStatusChange("Microphone access denied — joining in listen-only mode");
+      this._micEnabled = false;
     }
 
     // Connect socket
@@ -102,6 +102,11 @@ export class CallEngine {
       this.stopHeartbeat();
       this.callbacks.onStatusChange("Reconnecting...");
       this.callbacks.onDisconnected();
+    });
+
+    this.socket.on("connect_error", () => {
+      if (this.destroyed) return;
+      this.callbacks.onStatusChange("Server unreachable — retrying...");
     });
   }
 

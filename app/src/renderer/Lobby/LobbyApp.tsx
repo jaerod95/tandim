@@ -22,6 +22,15 @@ export function LobbyApp() {
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [roomOccupancy, setRoomOccupancy] = useState<Map<string, number>>(new Map());
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
+  const [serverReachable, setServerReachable] = useState(true);
+  const [joinError, setJoinError] = useState<string | null>(null);
+
+  // Auto-dismiss join error after 5 seconds
+  useEffect(() => {
+    if (!joinError) return;
+    const timeout = setTimeout(() => setJoinError(null), 5000);
+    return () => clearTimeout(timeout);
+  }, [joinError]);
 
   const { users, setStatus } = usePresence({
     apiUrl: API_URL,
@@ -58,8 +67,9 @@ export function LobbyApp() {
           occ.set(room.roomId, room.peerCount);
         }
         setRoomOccupancy(occ);
+        setServerReachable(true);
       } catch {
-        // Server may not be running
+        setServerReachable(false);
       }
     };
     poll();
@@ -127,6 +137,7 @@ export function LobbyApp() {
         await window.tandim?.openCallWindow(payload);
       } catch (error) {
         console.error("Failed to open call window:", error);
+        setJoinError("Failed to open call window. Please try again.");
       }
     },
     [selectedRoom],
@@ -145,6 +156,23 @@ export function LobbyApp() {
           />
           <SidebarInset>
             <LobbyHeader title={selectedRoom ?? "Tandim"} />
+            {!serverReachable && (
+              <div className="flex items-center gap-2 border-b border-red-900/50 bg-red-950/50 px-4 py-2 text-xs text-red-400">
+                <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+                Server unreachable — retrying...
+              </div>
+            )}
+            {joinError && (
+              <div className="flex items-center justify-between border-b border-amber-900/50 bg-amber-950/50 px-4 py-2 text-xs text-amber-400">
+                <span>{joinError}</span>
+                <button
+                  onClick={() => setJoinError(null)}
+                  className="ml-2 text-amber-500 hover:text-amber-300"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
             <div className="flex flex-1 overflow-hidden">
               <LobbyContent
                 displayName={DISPLAY_NAME}
