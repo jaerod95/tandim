@@ -1,344 +1,109 @@
-# Agent Guide for Tandim Development
+# Tandim — Agent Rules
 
-This document provides guidance for AI agents working on the Tandim codebase.
+## Project Overview
 
-## Quick Start for Agents
+Tandim is a faithful clone of [Tandem](https://tandem.chat), the virtual office for remote teams. It's a desktop app (Electron + React) backed by a WebRTC signaling server (Express + Socket.io). The goal is to replicate Tandem's core experience: always-on presence, instant voice/video, screen sharing, and crosstalk.
 
-### Inspecting the API Server
+Target audience: personal use and a small team of collaborators. Not aiming for broad adoption.
 
-When the API server is running, you can inspect its state using several methods:
+See `SPEC.md` for the full product spec and `ROADMAP.md` for priorities.
 
-#### 1. HTTP Debug Endpoints
+## Architecture
 
-```bash
-# Get server statistics
-curl http://localhost:3000/api/debug/stats
+Monorepo with pnpm workspaces:
 
-# List all rooms
-curl http://localhost:3000/api/debug/rooms
+- `api/` — Express + Socket.io signal server (port 3000). Manages room state, relays WebRTC signaling, handles heartbeats.
+- `app/` — Electron desktop app. React renderer with Tailwind + shadcn. WebRTC mesh connections. Multi-window (lobby + call windows).
+- `slack-app/` — Slack integration (optional, not actively developed).
 
-# Get specific room details
-curl http://localhost:3000/api/debug/rooms/workspace-id/room-id
+Key architectural decisions:
+- **WebRTC mesh** for calls (scales to ~4-6 peers per room, fine for our use case)
+- **Socket.io** for signaling and presence (not WebRTC data channels)
+- **Electron Forge + Vite** for app build pipeline
+- **No auth** currently — add before any public deployment
 
-# List all connected sockets
-curl http://localhost:3000/api/debug/sockets
-```
-
-#### 2. MCP Server Tools (Recommended for Agents)
-
-Enable the Tandim MCP server in your configuration to get real-time introspection capabilities:
-
-```json
-{
-  "mcpServers": {
-    "tandim-api": {
-      "command": "pnpm",
-      "args": ["-C", "api", "run", "mcp"]
-    }
-  }
-}
-```
-
-Then use these tools:
-- `get_all_rooms` - List all active rooms with peer counts
-- `get_room_details` - Get detailed information about a room
-- `get_socket_info` - List all connected sockets
-- `get_peer_by_socket` - Get peer details by socket ID
-- `get_server_stats` - Get overall server statistics
-- `simulate_peer_disconnect` - Test disconnection scenarios
-
-#### 3. CLI Inspection
+## Development
 
 ```bash
-cd api
-
-# Get stats
-pnpm inspect stats
-
-# List rooms
-pnpm inspect rooms
-
-# List sockets
-pnpm inspect sockets
+pnpm install          # Install all dependencies
+cd api && pnpm dev    # Start signal server (port 3000)
+cd app && pnpm start  # Start Electron app (separate terminal)
 ```
 
-### Testing Your Changes
-
-#### Automated Test Scenarios
-
-Run comprehensive end-to-end tests:
+### Testing
 
 ```bash
-cd api
-pnpm test:scenarios
+cd api && pnpm test              # API unit tests
+cd api && pnpm test:scenarios    # E2E signal server scenarios
+cd app && pnpm test              # App unit tests
+cd app && pnpm test:e2e          # App E2E tests
 ```
 
-This runs:
-1. Basic join/leave test
-2. Screen sharing test
-3. WebRTC signaling test
-4. Multiple concurrent rooms test
-5. Heartbeat test
-
-#### Using Mock Clients
-
-Create programmatic test clients:
-
-```typescript
-import { createMockClient, createMockRoom } from './api/test-utils/mock-client';
-
-// Single client
-const client = await createMockClient({
-  apiUrl: 'http://localhost:3000',
-  workspaceId: 'test',
-  roomId: 'room1',
-  userId: 'user1',
-  displayName: 'Test User',
-});
-
-await client.joinRoom();
-
-// Multiple clients in a room
-const clients = await createMockRoom(
-  'http://localhost:3000',
-  'test-workspace',
-  'test-room',
-  3 // number of peers
-);
-```
-
-#### Unit Tests
+### Debugging
 
 ```bash
-# API tests
-cd api && pnpm test
-
-# App tests
-cd app && pnpm test
-
-# E2E tests
-cd app && pnpm test:e2e
+curl http://localhost:3000/api/debug/stats     # Server stats
+curl http://localhost:3000/api/debug/rooms      # Active rooms
+curl http://localhost:3000/api/debug/sockets    # Connected sockets
+cd api && pnpm inspect stats                    # CLI inspection
 ```
 
-## Architecture Overview
+## Agent Rules
 
-### API Server (Port 3000)
+### Commits
 
-**Technologies:** Express + Socket.io + TypeScript
+- **Never commit or push without explicit permission.** Stage changes, describe what you did, and wait for approval.
 
-**Key Files:**
-- `api/bin/www.ts` - HTTP server entrypoint
-- `api/services/signalServer.ts` - WebRTC signaling logic
-- `api/services/roomState.ts` - Room and peer state management
-- `api/routes/debug.ts` - Debug endpoints for introspection
+### Code Style
 
-**WebSocket Events:**
+- TypeScript strict mode in both packages.
+- Clean architecture: clear separation of concerns, well-defined interfaces.
+- Keep files focused — one responsibility per file.
+- Use Zod for runtime validation at system boundaries (socket events, API inputs).
+- Use CSS modules or Tailwind utility classes — no inline style objects.
+- shadcn/Radix for UI primitives in the app.
+
+### Patterns to Follow
+
+- **Socket events**: Define schema with Zod, validate on receipt, emit typed payloads. See `api/services/signalServer.ts`.
+- **Room state**: All mutations go through `RoomStateStore`. Never manipulate room data directly.
+- **React components**: Functional components with hooks. Use context for shared call state (`CallContext`). Keep components small.
+- **WebRTC**: All connection management in `app/src/webrtc/`. The mesh state machine handles peer lifecycle.
+- **IPC**: Define channels in preload, expose via contextBridge. Never use `remote`.
+
+### Patterns to Avoid
+
+- Don't add dependencies without good reason. The stack is intentionally lean.
+- Don't over-abstract. Three similar lines > premature abstraction.
+- Don't add error handling for impossible states. Trust internal code, validate at boundaries.
+- Don't create wrapper utilities for things the framework already handles.
+- Don't add comments that restate what the code does. Only comment *why*.
+
+### Testing Expectations
+
+- New socket events need a test in `api/tests/`.
+- New API routes need a test in `api/tests/`.
+- Use the mock client library (`api/test-utils/mock-client.ts`) for integration tests.
+- UI components don't require unit tests unless they contain non-trivial logic.
+
+### File Organization
+
 ```
-Client → Server:
-  - signal:join - Join a room
-  - signal:heartbeat - Keep-alive
-  - signal:offer/answer/ice-candidate - WebRTC signaling
-  - signal:screen-share-start/stop - Screen sharing
+api/
+  bin/           → Server entrypoints (www.ts, mcp.ts)
+  routes/        → HTTP route handlers
+  services/      → Business logic (room state, signaling, config)
+  tests/         → Unit/integration tests
+  test-utils/    → Mock clients, test scenarios
+  scripts/       → CLI tools (inspect, test runner)
 
-Server → Client:
-  - signal:joined - Join confirmation
-  - signal:peer-joined/left - Peer events
-  - signal:offer/answer/ice-candidate - WebRTC signaling relay
-  - signal:screen-share-started/stopped - Screen share events
-  - signal:error - Error notifications
+app/src/
+  main.ts        → Electron main process
+  preload.ts     → Context bridge
+  renderer/      → React components (Lobby/, Call*)
+  webrtc/        → WebRTC mesh management
+  components/ui/ → shadcn primitives
+  hooks/         → Custom React hooks
+  lib/           → Utilities
+  styles/        → Global CSS
 ```
-
-### Electron App
-
-**Technologies:** Electron + React + TypeScript + Vite
-
-**Key Files:**
-- `app/src/main.ts` - Electron main process (window management, IPC)
-- `app/src/renderer/LobbyApp.tsx` - Lobby UI
-- `app/src/renderer/CallApp.tsx` - Active call UI
-- `app/src/webrtc/meshState.ts` - WebRTC mesh connection management
-- `app/src/presence.ts` - User presence tracking
-
-**IPC Messages:**
-```
-Renderer → Main:
-  - deep-link:getPendingRoom - Get pending room from deep link
-  - call:openWindow - Open a new call window
-  - call:getSession - Get call session details
-
-Main → Renderer:
-  - deep-link:room - Room deep link received
-```
-
-## Development Workflow
-
-### Starting the Development Environment
-
-```bash
-# Terminal 1: Start API server
-cd api && pnpm dev
-
-# Terminal 2: Start Electron app
-cd app && pnpm start
-```
-
-### Making Changes
-
-1. **Always read the relevant files first** before making changes
-2. **Run tests** after your changes to verify behavior
-3. **Use debug endpoints** to inspect state during development
-4. **Check the logs** - both API and Electron output useful debug info
-
-### Common Tasks
-
-#### Adding a New WebSocket Event
-
-1. Define the event schema in `api/services/signalServer.ts`
-2. Add the event handler in the signal server
-3. Update the client-side handler in `app/src/webrtc/` or `app/src/renderer/`
-4. Add a test in `api/test-utils/test-scenarios.ts`
-
-#### Adding a New API Endpoint
-
-1. Add route in `api/routes/api.ts` or create new router
-2. Add handler logic
-3. Update tests in `api/tests/`
-
-#### Adding a New UI Feature
-
-1. Update React components in `app/src/renderer/`
-2. Add any new IPC handlers in `app/src/main.ts` and `app/src/preload.ts`
-3. Add E2E test in `app/tests/e2e/`
-
-## Debugging Tips
-
-### API Server Issues
-
-1. Check server logs for errors
-2. Use `pnpm inspect stats` to see server state
-3. Use `pnpm inspect rooms` to see active rooms
-4. Check specific room: `curl http://localhost:3000/api/debug/rooms/workspace/room`
-
-### WebRTC Issues
-
-1. Open browser DevTools in Electron: Menu → View → Toggle Developer Tools
-2. Check the console for WebRTC errors
-3. Use the MCP tool `get_room_details` to see peer states
-4. Use mock clients to simulate connection scenarios
-
-### Connection Issues
-
-1. Verify API server is running: `curl http://localhost:3000/api/debug/health`
-2. Check Socket.io connection: look for "Connected with socket" in logs
-3. Verify room joining: check `signal:joined` event in console
-4. Use `pnpm inspect sockets` to see active connections
-
-## Testing Strategy
-
-### Before Committing
-
-1. Run unit tests: `pnpm test` in both `api/` and `app/`
-2. Run test scenarios: `cd api && pnpm test:scenarios`
-3. Manual smoke test: Start app, join a room, verify basic functionality
-
-### After Major Changes
-
-1. Run full E2E suite: `cd app && pnpm test:e2e`
-2. Test multiple scenarios with mock clients
-3. Check memory leaks with `get_server_stats` over time
-
-## Code Style
-
-- **TypeScript**: Strict mode enabled
-- **Formatting**: Run `pnpm lint` to check
-- **Error Handling**: Use structured error codes and retryable flags
-- **Logging**: Use `console.error` for logs (stdout reserved for MCP)
-- **Types**: Define interfaces for all data structures
-
-## Common Patterns
-
-### Room State Management
-
-```typescript
-// Join a peer
-const result = roomStateStore.joinPeer({
-  workspaceId: 'workspace-id',
-  roomId: 'room-id',
-  userId: 'user-id',
-  displayName: 'User Name',
-  socketId: socket.id,
-});
-
-// Get room details (for debugging)
-const details = roomStateStore.getRoomDetails('workspace-id', 'room-id');
-```
-
-### WebRTC Signaling
-
-```typescript
-// Relay signal to specific peer
-io.to(targetSocketId).emit('signal:offer', {
-  workspaceId,
-  roomId,
-  fromUserId,
-  payload: offer,
-});
-
-// Broadcast to room
-io.to(getRoomChannel(workspaceId, roomId)).emit('signal:peer-joined', {
-  userId,
-  displayName,
-});
-```
-
-### Mock Testing
-
-```typescript
-// Create test scenario
-const client1 = await createMockClient({...});
-const client2 = await createMockClient({...});
-
-await client1.joinRoom();
-await client2.joinRoom();
-
-// Verify behavior
-client1.on('signal:peer-joined', (data) => {
-  console.log('Peer joined:', data);
-});
-```
-
-## Performance Considerations
-
-- **Room Cleanup**: Empty rooms are automatically deleted
-- **Heartbeats**: Sent every 30 seconds, peers inactive for >60s are pruned
-- **Socket.io**: Uses WebSocket transport for low latency
-- **WebRTC**: Mesh architecture - scales to ~4-6 peers per room
-
-## Security Notes
-
-- **CORS**: Enabled for all origins (development mode)
-- **Input Validation**: All socket events validated with Zod schemas
-- **No Authentication**: Currently no auth (add before production)
-- **Deep Links**: Validated via `parseTandemDeepLink()`
-
-## Future Improvements
-
-Ideas for agents to consider:
-
-1. **Add Authentication**: JWT or session-based auth
-2. **Add Persistence**: Store room history, user profiles
-3. **SFU Mode**: Switch from mesh to SFU for larger rooms
-4. **Recording**: Add call recording capability
-5. **Chat**: Add text chat to rooms
-6. **Analytics**: Track usage metrics
-7. **Rate Limiting**: Prevent abuse of API endpoints
-8. **Encryption**: End-to-end encryption for calls
-
-## Questions?
-
-If you encounter issues or have questions:
-
-1. Check the debug endpoints first
-2. Review the test scenarios for examples
-3. Read the source code (it's well-commented)
-4. Check git history for recent changes
