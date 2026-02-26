@@ -354,7 +354,12 @@ export class CallEngine {
     }
 
     try {
-      this.screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: { ideal: 30, max: 60 },
+        } as MediaTrackConstraints,
+        audio: false,
+      });
       const videoTrack = this.screenStream.getVideoTracks()[0];
 
       // Handle user clicking "Stop sharing" in system dialog
