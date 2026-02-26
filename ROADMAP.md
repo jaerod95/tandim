@@ -59,6 +59,8 @@ Focus: Close the gap with Tandem's core features.
 - [ ] Quick talk / tap-to-call on a specific person
 - [ ] Notification sounds (peer joined, someone talking to you)
 - [ ] Deep link improvements (workspace + room routing)
+- [ ] Make a custom logo for the app and update the electron app icons
+- [ ] Add some basic branding to make it feel like an app
 
 ## Phase 5: Deployment & Distribution
 
