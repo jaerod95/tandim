@@ -2,14 +2,14 @@
 
 ## Current State
 
-End-to-end MVP complete with Phase 1 stability work and Phase 2 server foundation:
+End-to-end MVP with Phase 1 complete, Phase 2 crosstalk mostly complete:
 
 - API server with debug routes (factory pattern), heartbeat pruning, `/api/rooms` polling endpoints
 - Electron main process with IPC handlers for multi-window (lobby + call windows), deep link support
 - Lobby UI with room list (emoji + occupancy badges), team members, room detail panel with join flow
 - WebRTC engine: `PeerConnectionManager` (per-peer) + `CallEngine` (orchestrator) + `useCallEngine` hook
 - Call window with video grid, mic/camera/screen share controls, leave button
-- Screen sharing with focused layout, fullscreen toggle, fit/fill toggle, hover controls
+- Screen sharing with focused layout, race-condition-free stream detection, proper sender cleanup
 - Socket.io reconnection handling, `beforeunload` cleanup
 - WebRTC edge case handling: ICE restart (max 2 retries), perfect negotiation, connection monitoring
 - Presence system: server-side PresenceStore, lobby socket integration, idle detection
@@ -17,9 +17,9 @@ End-to-end MVP complete with Phase 1 stability work and Phase 2 server foundatio
 - App tray icon with status-based SVG icons, macOS close-to-tray
 - Keyboard shortcuts (Cmd+D mute, Cmd+E camera, Cmd+Shift+S screen share, Cmd+Shift+H leave)
 - Error states in UI (server unreachable banner, join error toast, colored status indicators)
-- Crosstalk server foundation: state management, socket events, auto-cleanup on peer leave (18 tests)
+- Crosstalk: multiple concurrent crosstalks per room, Web Audio API gain routing, volume slider, visual indicators (blue ring / dimmed tiles / context menu / header banner)
 - Debug/introspection infrastructure (HTTP endpoints, CLI tool, MCP server)
-- Test suite (unit + E2E scenarios)
+- Test suite (36 tests passing — unit + E2E + crosstalk)
 
 ## Phase 1: Stability & Polish
 
@@ -39,13 +39,13 @@ Focus: Make what exists reliable and polished.
 
 Focus: Implement the core differentiating feature.
 
-- [x] Server-side crosstalk state management (who's in crosstalk with whom) — RoomStateStore + auto-cleanup
-- [x] Socket events for crosstalk lifecycle (start, end) — Zod-validated, with tests
-- [ ] Client-side audio routing (Web Audio API gain nodes per peer)
-- [ ] Crosstalk volume slider for outside conversations
-- [ ] Visual indicators in call UI (who's in crosstalk, who's outside)
+- [x] Server-side crosstalk state management — multiple concurrent crosstalks, one-per-user with auto-leave
+- [x] Socket events for crosstalk lifecycle (start, end) — Zod-validated, 21 tests
+- [x] Client-side audio routing (Web Audio API gain nodes per peer)
+- [x] Crosstalk volume slider for outside conversations (CrosstalkControls component)
+- [x] Visual indicators in call UI (blue ring on participants, dimmed outsiders, header banner)
+- [x] Multiple concurrent crosstalks in the same room (auto-leave old crosstalk)
 - [ ] Crosstalk invitation flow (pull someone in, they can accept/decline)
-- [ ] Multiple concurrent crosstalks in the same room
 
 ## Phase 3: Getting it ready to distribute to friends
 
