@@ -45,6 +45,11 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
   const [activeCrosstalks, setActiveCrosstalks] = useState<CrosstalkInfo[]>([]);
   const [outsideVolume, setOutsideVolume] = useState(0.15);
   const tileVersionRef = useRef(0);
+  const presenceRef = useRef<PresenceEntry[]>([]);
+
+  useEffect(() => {
+    presenceRef.current = presence;
+  }, [presence]);
 
   useEffect(() => {
     if (!session) return;
@@ -66,7 +71,7 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
         const version = tileVersionRef.current;
         setRemoteTiles((prev) => {
           const existing = prev.find((t) => t.userId === userId);
-          const displayName = presence.find((p) => p.userId === userId)?.displayName ?? userId;
+          const displayName = presenceRef.current.find((p) => p.userId === userId)?.displayName ?? userId;
           if (existing) {
             return prev.map((t) => t.userId === userId ? { ...t, stream, version } : t);
           }
@@ -78,7 +83,7 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
       },
       onRemoteScreenStream: (userId: string, stream: MediaStream) => {
         tileVersionRef.current += 1;
-        const displayName = presence.find((p) => p.userId === userId)?.displayName ?? userId;
+        const displayName = presenceRef.current.find((p) => p.userId === userId)?.displayName ?? userId;
         setScreenShareTile({ userId, displayName, stream, version: tileVersionRef.current });
       },
       onRemoteScreenStreamRemoved: () => {

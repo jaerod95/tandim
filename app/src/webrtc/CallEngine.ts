@@ -320,15 +320,13 @@ export class CallEngine {
         const stream = event.streams[0];
         if (!stream) return;
 
-        // If this peer is the active screen sharer and we already have
-        // a different stream for them, the new stream is their screen share
+        // A second, different stream from a peer is a screen share.
+        // We detect this without relying on _activeScreenSharerUserId
+        // because the WebRTC track often arrives before the socket event.
         const existingStream = this.remoteStreams.get(peerId);
-        const isScreenShare =
-          this._activeScreenSharerUserId === peerId &&
-          existingStream &&
-          existingStream.id !== stream.id;
+        const isSecondStream = existingStream && existingStream.id !== stream.id;
 
-        if (isScreenShare) {
+        if (isSecondStream) {
           this.remoteScreenStreams.set(peerId, stream);
           this.callbacks.onRemoteScreenStream(peerId, stream);
         } else if (!existingStream) {
@@ -567,12 +565,12 @@ export class CallEngine {
 
     // Remove senders from peer connections — triggers onnegotiationneeded
     for (const sender of this.screenSenders) {
-      try {
-        for (const pcm of this.peers.values()) {
+      for (const pcm of this.peers.values()) {
+        try {
           pcm.removeTrack(sender);
+        } catch {
+          // Sender doesn't belong to this PCM
         }
-      } catch {
-        // Sender may already be removed
       }
     }
     this.screenSenders = [];
