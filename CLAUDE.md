@@ -52,7 +52,9 @@ cd api && pnpm inspect stats                    # CLI inspection
 
 ### Commits
 
-- **Never commit or push without explicit permission.** Stage changes, describe what you did, and wait for approval.
+- Commit and merge freely — no PRs needed for this project.
+- Write clear, concise commit messages that explain the "why".
+- Merge feature branches directly into main when work is complete.
 
 ### Code Style
 

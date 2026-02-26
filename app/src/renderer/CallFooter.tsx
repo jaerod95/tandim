@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useCallContext } from "./CallContext";
 import { useCallShortcuts } from "./hooks/useCallShortcuts";
 import { useMediaDevices } from "./hooks/useMediaDevices";
@@ -12,7 +12,65 @@ import {
   Monitor,
   PhoneOff,
   Volume2,
+  MessageSquare,
 } from "lucide-react";
+
+function CrosstalkInviteButton() {
+  const { engine, inviteToCrosstalk, outgoingInvitation } = useCallContext();
+  const [showMenu, setShowMenu] = useState(false);
+
+  const peers = engine.presence;
+  const hasPeers = peers.length > 0;
+  const hasPending = outgoingInvitation !== null;
+
+  const handleInvite = (userId: string) => {
+    inviteToCrosstalk([userId]);
+    setShowMenu(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        disabled={!hasPeers || hasPending}
+        className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors ${
+          hasPending
+            ? "bg-indigo-600/20 text-indigo-400"
+            : hasPeers
+              ? "text-zinc-500 hover:bg-zinc-800"
+              : "cursor-not-allowed text-zinc-700"
+        }`}
+        title={
+          hasPending
+            ? "Invitation pending..."
+            : hasPeers
+              ? "Start side conversation"
+              : "No peers to invite"
+        }
+      >
+        <MessageSquare className="h-4 w-4" />
+      </button>
+
+      {showMenu && (
+        <div className="absolute bottom-full left-0 mb-2 w-48 rounded-md border border-zinc-700 bg-zinc-800 py-1 shadow-xl">
+          <div className="px-3 py-1.5 text-xs font-medium text-zinc-400">
+            Invite to side conversation
+          </div>
+          {peers.map((peer) => (
+            <button
+              key={peer.userId}
+              onClick={() => handleInvite(peer.userId)}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-zinc-200 transition-colors hover:bg-zinc-700"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              {peer.displayName}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CallFooter() {
   const { session, engine } = useCallContext();
@@ -109,6 +167,7 @@ export default function CallFooter() {
 
       <div className="flex items-center gap-2">
         <CrosstalkControls />
+        <CrosstalkInviteButton />
         <button
           onClick={() => void engine.toggleScreenShare()}
           className={`flex h-9 items-center justify-center gap-1.5 rounded-md px-2 transition-colors ${

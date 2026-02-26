@@ -2,7 +2,7 @@
 
 ## Current State
 
-End-to-end MVP with Phase 1 complete, Phase 2 crosstalk mostly complete:
+End-to-end MVP with Phases 1-3 and 5 complete:
 
 - API server with debug routes (factory pattern), heartbeat pruning, `/api/rooms` polling endpoints
 - Electron main process with IPC handlers for multi-window (lobby + call windows), deep link support
@@ -45,34 +45,31 @@ Focus: Implement the core differentiating feature.
 - [x] Crosstalk volume slider for outside conversations (CrosstalkControls component)
 - [x] Visual indicators in call UI (blue ring on participants, dimmed outsiders, header banner)
 - [x] Multiple concurrent crosstalks in the same room (auto-leave old crosstalk)
-- [ ] Crosstalk invitation flow (pull someone in, they can accept/decline)
+- [x] Crosstalk invitation flow (pull someone in, they can accept/decline)
 
 ## Phase 3: Getting it ready to distribute to friends
 
 Focus: Close the gap with Tandem's core features.
 
-- [ ] User profiles (display name, avatar, settings)
-- [ ] Authentication (JWT or session-based)
-- [ ] Persistent room definitions (name, emoji, order — stored on server)
-- [ ] Room creation/editing/deletion from the UI
-- [ ] Idle detection (OS-level activity monitoring)
-- [ ] Quick talk / tap-to-call on a specific person
-- [ ] Notification sounds (peer joined, someone talking to you)
-- [ ] Deep link improvements (workspace + room routing)
-- [ ] Make a custom logo for the app and update the electron app icons
-- [ ] Add some basic branding to make it feel like an app
+- [x] User profiles (display name, avatar, settings)
+- [x] Authentication (JWT or session-based)
+- [x] Persistent room definitions (name, emoji, order — stored on server)
+- [x] Room creation/editing/deletion from the UI
+- [x] Idle detection (OS-level activity monitoring)
+- [x] Quick talk / tap-to-call on a specific person
+- [x] Notification sounds (peer joined, someone talking to you)
+- [x] Deep link improvements (workspace + room routing)
+- [x] Make a custom logo for the app and update the electron app icons
+- [x] Add some basic branding to make it feel like an app
+- [x] Bugfix: Fix join without audio button when joining a room from the lobby so the mic is set to muted
+- [x] Do Not Disturb mode
 
 ## Phase 5: Deployment & Distribution
 
 Focus: Get it running for the team.
 
-- [ ] Do Not Disturb mode
-- [ ] Deploy API server to cloud (Fly.io, Railway, or similar)
-- [ ] HTTPS + WSS for production signaling
-- [ ] TURN server setup for peers behind restrictive NATs
-- [ ] Electron auto-update (electron-updater + GitHub releases)
-- [ ] macOS code signing and notarization
-- [ ] Linux packaging (.deb, .AppImage)
+- [x] Electron auto-update (electron-updater + GitHub releases)
+- [x] macOS code signing and notarization (ad hoc)
 
 ## Future Ideas
 

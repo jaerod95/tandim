@@ -6,24 +6,91 @@ import { LobbySidebar } from "@/renderer/Lobby/LobbySidebar";
 import { LobbyHeader } from "@/renderer/Lobby/LobbyHeader";
 import { LobbyContent } from "@/renderer/Lobby/LobbyContent";
 import { LobbyRightSidebar } from "@/renderer/Lobby/LobbyRightSidebar";
-import type { CallSession } from "@/renderer/types";
-import { ROOMS } from "@/renderer/types";
+import { UpdateBanner } from "@/renderer/Lobby/UpdateBanner";
+import { SettingsDialog } from "@/renderer/Lobby/SettingsDialog";
+import { QuickTalkNotification } from "@/renderer/Lobby/QuickTalkNotification";
+import { AuthScreen } from "@/renderer/Auth/AuthScreen";
+import type { CallSession, Room } from "@/renderer/types";
+import { DEFAULT_ROOMS } from "@/renderer/types";
 import { usePresence } from "@/hooks/use-presence";
+import { useAuth } from "@/hooks/use-auth";
 import { useIdleDetector } from "@/hooks/use-idle-detector";
+import { useDnd } from "@/hooks/use-dnd";
+import { useUserProfile } from "@/hooks/use-user-profile";
 
 const API_URL = "http://localhost:3000";
 const WORKSPACE_ID = "team-local";
-const DISPLAY_NAME = "Jrod";
-const USER_ID = `u-${Math.random().toString(36).slice(2, 8)}`;
 
 type RoomParticipant = { userId: string; displayName: string };
 
+type IncomingQuickTalk = {
+  roomId: string;
+  fromUserId: string;
+  fromDisplayName: string;
+  workspaceId: string;
+};
+
 export function LobbyApp() {
+  const auth = useAuth({ apiUrl: API_URL });
+
+  if (auth.isLoading) {
+    return (
+      <ThemeProvider>
+        <div className="flex h-screen w-screen items-center justify-center bg-zinc-950 text-zinc-400">
+          Loading...
+        </div>
+      </ThemeProvider>
+    );
+  }
+
+  if (!auth.isAuthenticated) {
+    return (
+      <ThemeProvider>
+        <AuthScreen
+          onLogin={auth.login}
+          onRegister={auth.register}
+          error={auth.error}
+        />
+      </ThemeProvider>
+    );
+  }
+
+  return (
+    <AuthenticatedLobby
+      userId={auth.user!.userId}
+      displayName={auth.user!.displayName}
+      getToken={auth.getToken}
+      onLogout={auth.logout}
+    />
+  );
+}
+
+function AuthenticatedLobby({
+  userId: authUserId,
+  displayName: authDisplayName,
+  getToken,
+  onLogout,
+}: {
+  userId: string;
+  displayName: string;
+  getToken: () => string | null;
+  onLogout: () => void;
+}) {
+  const [rooms, setRooms] = useState<Room[]>(DEFAULT_ROOMS);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [roomOccupancy, setRoomOccupancy] = useState<Map<string, number>>(new Map());
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [serverReachable, setServerReachable] = useState(true);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [incomingQuickTalk, setIncomingQuickTalk] = useState<IncomingQuickTalk | null>(null);
+  const { dndActive, toggleDnd } = useDnd();
+
+  const { profile, updateProfile } = useUserProfile({
+    apiUrl: API_URL,
+    userId: authUserId,
+    defaultDisplayName: authDisplayName,
+  });
 
   // Auto-dismiss join error after 5 seconds
   useEffect(() => {
@@ -32,17 +99,86 @@ export function LobbyApp() {
     return () => clearTimeout(timeout);
   }, [joinError]);
 
-  const { users, setStatus } = usePresence({
+  const { users, setStatus, socketRef } = usePresence({
     apiUrl: API_URL,
     workspaceId: WORKSPACE_ID,
-    userId: USER_ID,
-    displayName: DISPLAY_NAME,
+    userId: authUserId,
+    displayName: profile.displayName,
+    token: getToken() ?? undefined,
   });
 
-  // Idle detection
-  const onIdle = useCallback(() => setStatus("idle"), [setStatus]);
-  const onActive = useCallback(() => setStatus("available"), [setStatus]);
+  // Sync DND status with presence
+  useEffect(() => {
+    if (dndActive) {
+      setStatus("dnd");
+    } else {
+      setStatus("available");
+    }
+  }, [dndActive, setStatus]);
+
+  // Idle detection (DND takes priority)
+  const onIdle = useCallback(() => {
+    if (!dndActive) setStatus("idle");
+  }, [setStatus, dndActive]);
+  const onActive = useCallback(() => {
+    if (!dndActive) setStatus("available");
+  }, [setStatus, dndActive]);
   useIdleDetector({ onIdle, onActive });
+
+  // Fetch room definitions from API, fall back to defaults
+  const fetchRooms = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/room-definitions`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setRooms(data);
+          return;
+        }
+      }
+    } catch {
+      // Fall back to defaults
+    }
+    setRooms(DEFAULT_ROOMS);
+  }, []);
+
+  useEffect(() => {
+    fetchRooms();
+  }, [fetchRooms]);
+
+  // Quick talk socket listeners
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    const handleIncoming = (data: IncomingQuickTalk) => {
+      setIncomingQuickTalk(data);
+    };
+
+    const handleCancelled = () => {
+      setIncomingQuickTalk(null);
+    };
+
+    const handleAccepted = (data: { roomId: string }) => {
+      openCallWindow(data.roomId);
+    };
+
+    const handleDeclined = () => {
+      setJoinError("Quick talk was declined.");
+    };
+
+    socket.on("signal:quick-talk-incoming", handleIncoming);
+    socket.on("signal:quick-talk-cancelled", handleCancelled);
+    socket.on("signal:quick-talk-accepted", handleAccepted);
+    socket.on("signal:quick-talk-declined", handleDeclined);
+
+    return () => {
+      socket.off("signal:quick-talk-incoming", handleIncoming);
+      socket.off("signal:quick-talk-cancelled", handleCancelled);
+      socket.off("signal:quick-talk-accepted", handleAccepted);
+      socket.off("signal:quick-talk-declined", handleDeclined);
+    };
+  }, [socketRef.current]);
 
   // Derive room occupancy from presence data
   const presenceOccupancy = useMemo(() => {
@@ -111,51 +247,133 @@ export function LobbyApp() {
     return () => clearInterval(id);
   }, [selectedRoom]);
 
-  // Deep link support
-  useEffect(() => {
-    window.tandim?.getPendingRoom().then((pending) => {
-      if (pending) setSelectedRoom(pending);
-    });
-    window.tandim?.onDeepLinkRoom((roomId) => {
-      setSelectedRoom(roomId);
-    });
-  }, []);
+  const openCallWindow = useCallback(async (roomId: string, audioEnabled = true) => {
+    const payload: CallSession = {
+      audioEnabled,
+      apiUrl: API_URL,
+      workspaceId: WORKSPACE_ID,
+      roomId,
+      displayName: profile.displayName,
+      userId: authUserId,
+      token: getToken() ?? undefined,
+    };
+
+    try {
+      await window.tandim?.openCallWindow(payload);
+    } catch (error) {
+      console.error("Failed to open call window:", error);
+      setJoinError("Failed to open call window. Please try again.");
+    }
+  }, [profile.displayName, authUserId, getToken]);
 
   const joinRoom = useCallback(
     async (audioEnabled: boolean) => {
       if (!selectedRoom) return;
-
-      const payload: CallSession = {
-        apiUrl: API_URL,
-        workspaceId: WORKSPACE_ID,
-        roomId: selectedRoom,
-        displayName: DISPLAY_NAME,
-        userId: USER_ID,
-      };
-
-      try {
-        await window.tandim?.openCallWindow(payload);
-      } catch (error) {
-        console.error("Failed to open call window:", error);
-        setJoinError("Failed to open call window. Please try again.");
-      }
+      await openCallWindow(selectedRoom, audioEnabled);
     },
-    [selectedRoom],
+    [selectedRoom, openCallWindow],
   );
 
-  const selectedRoomObj = ROOMS.find((r) => r.name === selectedRoom) ?? null;
+  // Deep link support
+  useEffect(() => {
+    // Handle pending deep link from before the window was ready
+    window.tandim?.getPendingDeepLink().then((pending) => {
+      if (!pending) return;
+
+      switch (pending.type) {
+        case "join-room":
+          void openCallWindow(pending.roomId);
+          break;
+        case "view-room":
+          setSelectedRoom(pending.roomId);
+          break;
+        case "workspace":
+          console.log("Deep link workspace switch:", pending.workspaceId);
+          break;
+      }
+    });
+
+    // Live deep link events while window is open
+    window.tandim?.onDeepLinkRoom((roomId) => {
+      setSelectedRoom(roomId);
+    });
+
+    window.tandim?.onDeepLinkJoin((data) => {
+      void openCallWindow(data.roomId);
+    });
+
+    window.tandim?.onDeepLinkWorkspace((data) => {
+      console.log("Deep link workspace switch:", data.workspaceId);
+    });
+  }, [openCallWindow]);
+
+  const handleRefreshRooms = useCallback(() => {
+    fetchRooms();
+  }, [fetchRooms]);
+
+  const handleRoomDeleted = useCallback(
+    (deletedRoomName: string) => {
+      if (selectedRoom === deletedRoomName) {
+        setSelectedRoom(null);
+      }
+      fetchRooms();
+    },
+    [selectedRoom, fetchRooms],
+  );
+
+  const handleQuickTalkRequest = useCallback((targetUserId: string) => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    socket.emit("signal:quick-talk-request", {
+      workspaceId: WORKSPACE_ID,
+      targetUserId,
+    });
+
+    socket.once("signal:quick-talk-created", (data: { roomId: string }) => {
+      // Room created, waiting for target to accept/decline
+    });
+  }, [socketRef]);
+
+  const handleQuickTalkAccept = useCallback((roomId: string) => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    socket.emit("signal:quick-talk-accept", { roomId });
+    setIncomingQuickTalk(null);
+    openCallWindow(roomId);
+  }, [socketRef, openCallWindow]);
+
+  const handleQuickTalkDecline = useCallback((roomId: string) => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    socket.emit("signal:quick-talk-decline", { roomId });
+    setIncomingQuickTalk(null);
+  }, [socketRef]);
+
+  const selectedRoomObj = rooms.find((r) => r.name === selectedRoom) ?? null;
 
   return (
     <ThemeProvider>
       <TooltipProvider>
         <SidebarProvider>
           <LobbySidebar
+            rooms={rooms}
             selectedRoom={selectedRoom}
             onSelectRoom={setSelectedRoom}
             roomOccupancy={mergedOccupancy}
+            onRefreshRooms={handleRefreshRooms}
           />
           <SidebarInset>
-            <LobbyHeader title={selectedRoom ?? "Tandim"} />
+            <LobbyHeader
+              title={selectedRoom ?? "Tandim"}
+              dndActive={dndActive}
+              onToggleDnd={toggleDnd}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onLogout={onLogout}
+            />
+            <UpdateBanner />
             {!serverReachable && (
               <div className="flex items-center gap-2 border-b border-red-900/50 bg-red-950/50 px-4 py-2 text-xs text-red-400">
                 <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
@@ -175,9 +393,10 @@ export function LobbyApp() {
             )}
             <div className="flex flex-1 overflow-hidden">
               <LobbyContent
-                displayName={DISPLAY_NAME}
-                userId={USER_ID}
+                displayName={profile.displayName}
+                userId={authUserId}
                 users={users}
+                onQuickTalk={handleQuickTalkRequest}
               />
               {selectedRoom && (
                 <LobbyRightSidebar
@@ -185,10 +404,25 @@ export function LobbyApp() {
                   participants={participants}
                   onJoin={({ audioEnabled }) => void joinRoom(audioEnabled)}
                   onClose={() => setSelectedRoom(null)}
+                  onRefreshRooms={handleRefreshRooms}
                 />
               )}
             </div>
           </SidebarInset>
+          <SettingsDialog
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            profile={profile}
+            onSave={updateProfile}
+          />
+          {incomingQuickTalk && (
+            <QuickTalkNotification
+              roomId={incomingQuickTalk.roomId}
+              fromDisplayName={incomingQuickTalk.fromDisplayName}
+              onAccept={handleQuickTalkAccept}
+              onDecline={handleQuickTalkDecline}
+            />
+          )}
         </SidebarProvider>
       </TooltipProvider>
     </ThemeProvider>

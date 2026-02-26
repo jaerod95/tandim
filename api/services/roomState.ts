@@ -1,3 +1,5 @@
+import { randomUUID } from "crypto";
+
 export type Peer = {
   userId: string;
   displayName: string;
@@ -23,10 +25,21 @@ export type CrosstalkInfo = {
   participantUserIds: string[];
 };
 
+export type CrosstalkInvitation = {
+  invitationId: string;
+  inviterUserId: string;
+  inviterDisplayName: string;
+  inviteeUserIds: string[];
+  acceptedUserIds: Set<string>;
+  declinedUserIds: Set<string>;
+  createdAt: number;
+};
+
 type RoomState = {
   peersByUserId: Map<string, Peer>;
   activeScreenSharerUserId: string | null;
   crosstalks: Map<string, Crosstalk>;
+  crosstalkInvitations: Map<string, CrosstalkInvitation>;
 };
 
 export type JoinPeerInput = {
@@ -39,6 +52,9 @@ export type JoinPeerInput = {
 };
 
 let crosstalkCounter = 0;
+let quickTalkCounter = 0;
+
+export const CROSSTALK_INVITE_TTL_MS = 30_000;
 
 export class RoomStateStore {
   private readonly rooms = new Map<string, RoomState>();
@@ -46,6 +62,7 @@ export class RoomStateStore {
     string,
     { roomKey: string; workspaceId: string; roomId: string; userId: string }
   >();
+  private readonly quickTalkRooms = new Set<string>();
 
   joinPeer(input: JoinPeerInput): { roomPeers: Peer[]; activeScreenSharerUserId: string | null } {
     const now = input.nowMs ?? Date.now();
@@ -318,6 +335,173 @@ export class RoomStateStore {
     }));
   }
 
+  createCrosstalkInvitation(
+    workspaceId: string,
+    roomId: string,
+    inviterUserId: string,
+    inviteeUserIds: string[],
+    nowMs?: number
+  ):
+    | { ok: true; invitation: CrosstalkInvitation; roomKey: RoomKey }
+    | { ok: false; reason: string } {
+    const roomKey = this.toRoomKey(workspaceId, roomId);
+    const room = this.rooms.get(roomKey);
+    if (!room) {
+      return { ok: false, reason: "room_not_found" };
+    }
+
+    if (!room.peersByUserId.has(inviterUserId)) {
+      return { ok: false, reason: "inviter_not_in_room" };
+    }
+
+    for (const inviteeId of inviteeUserIds) {
+      if (!room.peersByUserId.has(inviteeId)) {
+        return { ok: false, reason: "invitee_not_in_room" };
+      }
+    }
+
+    const inviter = room.peersByUserId.get(inviterUserId)!;
+    const invitation: CrosstalkInvitation = {
+      invitationId: randomUUID(),
+      inviterUserId,
+      inviterDisplayName: inviter.displayName,
+      inviteeUserIds: [...inviteeUserIds],
+      acceptedUserIds: new Set(),
+      declinedUserIds: new Set(),
+      createdAt: nowMs ?? Date.now()
+    };
+
+    room.crosstalkInvitations.set(invitation.invitationId, invitation);
+
+    return {
+      ok: true,
+      invitation,
+      roomKey: { workspaceId, roomId }
+    };
+  }
+
+  acceptCrosstalkInvitation(
+    workspaceId: string,
+    roomId: string,
+    invitationId: string,
+    userId: string
+  ):
+    | { ok: true; invitation: CrosstalkInvitation; allAccepted: boolean; roomKey: RoomKey }
+    | { ok: false; reason: string } {
+    const roomKey = this.toRoomKey(workspaceId, roomId);
+    const room = this.rooms.get(roomKey);
+    if (!room) {
+      return { ok: false, reason: "room_not_found" };
+    }
+
+    const invitation = room.crosstalkInvitations.get(invitationId);
+    if (!invitation) {
+      return { ok: false, reason: "invitation_not_found" };
+    }
+
+    if (!invitation.inviteeUserIds.includes(userId)) {
+      return { ok: false, reason: "not_invited" };
+    }
+
+    invitation.acceptedUserIds.add(userId);
+
+    const allAccepted = invitation.inviteeUserIds.every((id) =>
+      invitation.acceptedUserIds.has(id)
+    );
+
+    if (allAccepted) {
+      room.crosstalkInvitations.delete(invitationId);
+    }
+
+    return {
+      ok: true,
+      invitation,
+      allAccepted,
+      roomKey: { workspaceId, roomId }
+    };
+  }
+
+  declineCrosstalkInvitation(
+    workspaceId: string,
+    roomId: string,
+    invitationId: string,
+    userId: string
+  ):
+    | { ok: true; invitation: CrosstalkInvitation; roomKey: RoomKey }
+    | { ok: false; reason: string } {
+    const roomKey = this.toRoomKey(workspaceId, roomId);
+    const room = this.rooms.get(roomKey);
+    if (!room) {
+      return { ok: false, reason: "room_not_found" };
+    }
+
+    const invitation = room.crosstalkInvitations.get(invitationId);
+    if (!invitation) {
+      return { ok: false, reason: "invitation_not_found" };
+    }
+
+    if (!invitation.inviteeUserIds.includes(userId)) {
+      return { ok: false, reason: "not_invited" };
+    }
+
+    invitation.declinedUserIds.add(userId);
+    invitation.inviteeUserIds = invitation.inviteeUserIds.filter((id) => id !== userId);
+
+    if (invitation.inviteeUserIds.length === 0) {
+      room.crosstalkInvitations.delete(invitationId);
+    }
+
+    return {
+      ok: true,
+      invitation,
+      roomKey: { workspaceId, roomId }
+    };
+  }
+
+  expireCrosstalkInvitations(nowMs?: number): Array<{
+    roomKey: RoomKey;
+    invitation: CrosstalkInvitation;
+  }> {
+    const now = nowMs ?? Date.now();
+    const expired: Array<{ roomKey: RoomKey; invitation: CrosstalkInvitation }> = [];
+
+    for (const [key, room] of this.rooms.entries()) {
+      const [workspaceId, roomId] = key.split(":");
+      for (const [invitationId, invitation] of room.crosstalkInvitations.entries()) {
+        if (now - invitation.createdAt >= CROSSTALK_INVITE_TTL_MS) {
+          room.crosstalkInvitations.delete(invitationId);
+          expired.push({
+            roomKey: { workspaceId, roomId },
+            invitation
+          });
+        }
+      }
+    }
+
+    return expired;
+  }
+
+  getCrosstalkInvitation(
+    workspaceId: string,
+    roomId: string,
+    invitationId: string
+  ): CrosstalkInvitation | null {
+    const room = this.rooms.get(this.toRoomKey(workspaceId, roomId));
+    return room?.crosstalkInvitations.get(invitationId) ?? null;
+  }
+
+  createQuickTalkRoom(workspaceId: string, initiatorUserId: string, targetUserId: string): string {
+    const roomId = `quick-talk-${Date.now()}_${++quickTalkCounter}_${Math.random().toString(36).slice(2, 8)}`;
+    const roomKey = this.toRoomKey(workspaceId, roomId);
+    this.ensureRoom(roomKey);
+    this.quickTalkRooms.add(roomKey);
+    return roomId;
+  }
+
+  isQuickTalkRoom(workspaceId: string, roomId: string): boolean {
+    return this.quickTalkRooms.has(this.toRoomKey(workspaceId, roomId));
+  }
+
   private removeUserFromCrosstalks(room: RoomState, userId: string): string[] {
     const removedIds: string[] = [];
     for (const [id, ct] of room.crosstalks) {
@@ -341,7 +525,8 @@ export class RoomStateStore {
     const created: RoomState = {
       peersByUserId: new Map<string, Peer>(),
       activeScreenSharerUserId: null,
-      crosstalks: new Map<string, Crosstalk>()
+      crosstalks: new Map<string, Crosstalk>(),
+      crosstalkInvitations: new Map<string, CrosstalkInvitation>()
     };
     this.rooms.set(roomKey, created);
     return created;

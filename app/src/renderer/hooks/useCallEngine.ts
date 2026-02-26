@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CallEngine, type CrosstalkInfo } from "@/webrtc/CallEngine";
 import type { CallSession, SignalPeer, RemoteTile, PresenceEntry } from "@/renderer/types";
+import type { Socket } from "socket.io-client";
 
 export type UseCallEngineReturn = {
   status: string;
@@ -27,13 +28,14 @@ export type UseCallEngineReturn = {
   endCrosstalk: (crosstalkId: string) => void;
   setCrosstalkVolume: (volume: number) => void;
   leave: () => void;
+  getSocket: (() => Socket | null) | null;
 };
 
 export function useCallEngine(session: CallSession | null): UseCallEngineReturn {
   const engineRef = useRef<CallEngine | null>(null);
   const [status, setStatus] = useState("Initializing...");
   const [joined, setJoined] = useState(false);
-  const [micEnabled, setMicEnabled] = useState(true);
+  const [micEnabled, setMicEnabled] = useState(session?.audioEnabled ?? true);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [screenSharing, setScreenSharing] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -195,6 +197,10 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     }
   }, []);
 
+  const getSocket = useCallback((): Socket | null => {
+    return engineRef.current?.getSocket() ?? null;
+  }, []);
+
   const myCrosstalk = useMemo(() => {
     if (!session) return null;
     return activeCrosstalks.find(
@@ -227,5 +233,6 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     endCrosstalk,
     setCrosstalkVolume,
     leave,
+    getSocket,
   };
 }

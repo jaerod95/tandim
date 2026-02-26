@@ -5,8 +5,13 @@ import app, { mountErrorHandlers } from "../app";
 import { createSignalServer } from "../services/signalServer";
 import { RoomStateStore } from "../services/roomState";
 import { PresenceStore } from "../services/presenceStore";
+import { RoomDefinitionStore } from "../services/roomDefinitions";
+import { UserProfileStore } from "../services/userProfiles";
 import { createDebugRouter } from "../routes/debug";
 import { createRoomsRouter, createPresenceRouter } from "../routes/api";
+import { createRoomDefinitionsRouter } from "../routes/rooms";
+import { createProfilesRouter } from "../routes/profiles";
+import authRouter from "../routes/auth";
 
 const debug = createDebug("api:server");
 const port = normalizePort(process.env.PORT ?? "3000");
@@ -16,12 +21,17 @@ app.set("port", port);
 const server = http.createServer(app);
 const roomStateStore = new RoomStateStore();
 const presenceStore = new PresenceStore();
+const roomDefinitionStore = new RoomDefinitionStore();
+const userProfileStore = new UserProfileStore();
 const io = createSignalServer(server, roomStateStore, presenceStore);
 
 // Mount routes that require server context, then error handlers last
+app.use("/api/auth", authRouter);
 app.use("/api/debug", createDebugRouter({ roomStateStore, io }));
 app.use("/api/rooms", createRoomsRouter(roomStateStore));
 app.use("/api/presence", createPresenceRouter(presenceStore));
+app.use("/api/room-definitions", createRoomDefinitionsRouter(roomDefinitionStore));
+app.use("/api/profiles", createProfilesRouter(userProfileStore));
 mountErrorHandlers();
 
 // Prune inactive peers every 30 seconds
