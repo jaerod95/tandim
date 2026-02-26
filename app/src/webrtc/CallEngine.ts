@@ -2,6 +2,11 @@ import { io, Socket } from "socket.io-client";
 import { PeerConnectionManager } from "./PeerConnectionManager";
 import type { CallSession, SignalPeer } from "../renderer/types";
 
+type PeerAudioNodes = {
+  source: MediaStreamAudioSourceNode;
+  gain: GainNode;
+};
+
 export type CrosstalkInfo = {
   id: string;
   initiatorUserId: string;
@@ -47,6 +52,11 @@ export class CallEngine {
   /** Set of peerIds that were already in the room when we joined */
   private existingPeerIds = new Set<string>();
 
+  // Audio routing for crosstalk
+  private audioContext: AudioContext | null = null;
+  private peerAudioNodes = new Map<string, PeerAudioNodes>();
+  private _outsideVolume = 0.15;
+
   constructor(
     private session: CallSession,
     private callbacks: CallEngineCallbacks,
@@ -79,6 +89,9 @@ export class CallEngine {
       this._micEnabled = false;
     }
 
+    // Create AudioContext for routing remote audio through gain nodes
+    this.audioContext = new AudioContext();
+
     // Connect socket
     this.socket = io(this.session.apiUrl, {
       path: "/api/signal",
@@ -100,6 +113,9 @@ export class CallEngine {
         this.remoteStreams.clear();
         this.remoteScreenStreams.clear();
         this.existingPeerIds.clear();
+        for (const userId of [...this.peerAudioNodes.keys()]) {
+          this.teardownPeerAudio(userId);
+        }
       }
 
       this.callbacks.onStatusChange("Connecting...");
@@ -261,12 +277,14 @@ export class CallEngine {
     this.socket.on("signal:crosstalk-started", (data: { crosstalk: CrosstalkInfo }) => {
       if (this.destroyed) return;
       this._activeCrosstalks.set(data.crosstalk.id, data.crosstalk);
+      this.applyGainLevels();
       this.callbacks.onCrosstalksChanged(Array.from(this._activeCrosstalks.values()));
     });
 
     this.socket.on("signal:crosstalk-ended", (data: { crosstalkId: string }) => {
       if (this.destroyed) return;
       this._activeCrosstalks.delete(data.crosstalkId);
+      this.applyGainLevels();
       this.callbacks.onCrosstalksChanged(Array.from(this._activeCrosstalks.values()));
     });
 
@@ -315,10 +333,12 @@ export class CallEngine {
           this.callbacks.onRemoteScreenStream(peerId, stream);
         } else if (!existingStream) {
           this.remoteStreams.set(peerId, stream);
+          this.routeRemoteAudio(peerId, stream);
           this.callbacks.onRemoteStream(peerId, stream);
         } else {
           // Same stream, track added (e.g. camera track added to existing audio stream)
           this.remoteStreams.set(peerId, stream);
+          this.routeRemoteAudio(peerId, stream);
           this.callbacks.onRemoteStream(peerId, stream);
         }
       },
@@ -331,12 +351,10 @@ export class CallEngine {
         }
         if (state === "failed" || state === "closed") {
           // ICE restart is handled inside PeerConnectionManager (attemptIceRestart).
-          // Only remove the stream on "closed" (permanent) or when ICE restarts
-          // have been exhausted (which manifests as the connection staying "failed").
-          // We keep the stream around during ICE restart attempts so the UI
-          // doesn't flicker.
+          // Only remove the stream on "closed" (permanent).
           if (state === "closed") {
             this.remoteStreams.delete(peerId);
+            this.teardownPeerAudio(peerId);
             this.callbacks.onRemoteStreamRemoved(peerId);
           }
         }
@@ -385,11 +403,75 @@ export class CallEngine {
       this.peers.delete(userId);
     }
     this.remoteStreams.delete(userId);
+    this.teardownPeerAudio(userId);
     this.callbacks.onRemoteStreamRemoved(userId);
     if (this.remoteScreenStreams.has(userId)) {
       this.remoteScreenStreams.delete(userId);
       this.callbacks.onRemoteScreenStreamRemoved(userId);
     }
+  }
+
+  // ── Audio routing ──────────────────────────────────────────────
+
+  /**
+   * Route a remote peer's audio stream through the Web Audio API
+   * so we can control per-peer volume via GainNodes.
+   */
+  private routeRemoteAudio(userId: string, stream: MediaStream): void {
+    if (!this.audioContext) return;
+
+    // Tear down any existing nodes for this peer
+    this.teardownPeerAudio(userId);
+
+    const source = this.audioContext.createMediaStreamSource(stream);
+    const gain = this.audioContext.createGain();
+    gain.gain.value = this.getGainForPeer(userId);
+    source.connect(gain);
+    gain.connect(this.audioContext.destination);
+
+    this.peerAudioNodes.set(userId, { source, gain });
+  }
+
+  private teardownPeerAudio(userId: string): void {
+    const nodes = this.peerAudioNodes.get(userId);
+    if (!nodes) return;
+    try {
+      nodes.source.disconnect();
+      nodes.gain.disconnect();
+    } catch {
+      // Already disconnected
+    }
+    this.peerAudioNodes.delete(userId);
+  }
+
+  private getGainForPeer(userId: string): number {
+    // Find the crosstalk the local user is in (if any)
+    const myCrosstalk = Array.from(this._activeCrosstalks.values()).find(
+      (ct) => ct.participantUserIds.includes(this.session.userId)
+    );
+    if (!myCrosstalk) return 1.0;
+
+    const localInCrosstalk = true;
+    const peerInCrosstalk = myCrosstalk.participantUserIds.includes(userId);
+
+    if (!localInCrosstalk) return 1.0;
+    return peerInCrosstalk ? 1.0 : this._outsideVolume;
+  }
+
+  private applyGainLevels(): void {
+    for (const [userId, nodes] of this.peerAudioNodes) {
+      nodes.gain.gain.value = this.getGainForPeer(userId);
+    }
+  }
+
+  private teardownAllAudio(): void {
+    for (const userId of [...this.peerAudioNodes.keys()]) {
+      this.teardownPeerAudio(userId);
+    }
+    if (this.audioContext && this.audioContext.state !== "closed") {
+      this.audioContext.close().catch(() => {});
+    }
+    this.audioContext = null;
   }
 
   toggleMic(): boolean {
@@ -579,6 +661,13 @@ export class CallEngine {
     this.callbacks.onSinkIdChange?.(deviceId);
   }
 
+  // ── Crosstalk controls ──────────────────────────────────────
+
+  setCrosstalkVolume(volume: number): void {
+    this._outsideVolume = Math.max(0, Math.min(1, volume));
+    this.applyGainLevels();
+  }
+
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
@@ -597,6 +686,8 @@ export class CallEngine {
     this.destroyed = true;
     this.stopHeartbeat();
     this.stopScreenShare();
+    this.teardownAllAudio();
+    this._activeCrosstalks.clear();
 
     for (const pcm of this.peers.values()) {
       pcm.close();
@@ -634,4 +725,5 @@ export class CallEngine {
   get joined(): boolean { return this._joined; }
   get sinkId(): string { return this._sinkId; }
   get activeCrosstalks(): CrosstalkInfo[] { return Array.from(this._activeCrosstalks.values()); }
+  get outsideVolume(): number { return this._outsideVolume; }
 }

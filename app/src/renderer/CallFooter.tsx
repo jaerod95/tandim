@@ -3,6 +3,7 @@ import { useCallContext } from "./CallContext";
 import { useCallShortcuts } from "./hooks/useCallShortcuts";
 import { useMediaDevices } from "./hooks/useMediaDevices";
 import { DeviceMenu } from "./DeviceMenu";
+import CrosstalkControls from "./CrosstalkControls";
 import {
   Mic,
   MicOff,
@@ -106,7 +107,8 @@ export default function CallFooter() {
         )}
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
+        <CrosstalkControls />
         <button
           onClick={() => void engine.toggleScreenShare()}
           className={`flex h-9 items-center justify-center gap-1.5 rounded-md px-2 transition-colors ${

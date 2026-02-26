@@ -68,11 +68,12 @@ export function RemoteVideo({ label, stream, sinkId }: RemoteVideoProps) {
           <span className="text-xs text-zinc-400">{label}</span>
         </div>
       )}
+      {/* Audio is routed through the Web Audio API for per-peer gain control */}
       <video
         ref={ref}
         autoPlay
         playsInline
-        muted={false}
+        muted
         className="h-full w-full object-cover"
         style={{ display: hasVideo ? "block" : "none" }}
       />

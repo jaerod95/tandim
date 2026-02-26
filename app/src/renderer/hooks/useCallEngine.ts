@@ -16,6 +16,7 @@ export type UseCallEngineReturn = {
   sinkId: string;
   activeCrosstalks: CrosstalkInfo[];
   myCrosstalk: CrosstalkInfo | null;
+  outsideVolume: number;
   toggleMic: () => void;
   toggleCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
@@ -24,6 +25,7 @@ export type UseCallEngineReturn = {
   setSinkId: (deviceId: string) => void;
   startCrosstalk: (targetUserIds: string[]) => void;
   endCrosstalk: (crosstalkId: string) => void;
+  setCrosstalkVolume: (volume: number) => void;
   leave: () => void;
 };
 
@@ -41,6 +43,7 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
   const [screenShareTile, setScreenShareTile] = useState<RemoteTile | null>(null);
   const [sinkId, setSinkIdState] = useState("");
   const [activeCrosstalks, setActiveCrosstalks] = useState<CrosstalkInfo[]>([]);
+  const [outsideVolume, setOutsideVolume] = useState(0.15);
   const tileVersionRef = useRef(0);
 
   useEffect(() => {
@@ -163,13 +166,6 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     }
   }, []);
 
-  const leave = useCallback(() => {
-    if (engineRef.current) {
-      engineRef.current.leave();
-      engineRef.current = null;
-    }
-  }, []);
-
   const startCrosstalk = useCallback((targetUserIds: string[]) => {
     if (engineRef.current) {
       engineRef.current.startCrosstalk(targetUserIds);
@@ -179,6 +175,18 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
   const endCrosstalk = useCallback((crosstalkId: string) => {
     if (engineRef.current) {
       engineRef.current.endCrosstalk(crosstalkId);
+    }
+  }, []);
+
+  const setCrosstalkVolume = useCallback((volume: number) => {
+    engineRef.current?.setCrosstalkVolume(volume);
+    setOutsideVolume(volume);
+  }, []);
+
+  const leave = useCallback(() => {
+    if (engineRef.current) {
+      engineRef.current.leave();
+      engineRef.current = null;
     }
   }, []);
 
@@ -203,6 +211,7 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     sinkId,
     activeCrosstalks,
     myCrosstalk,
+    outsideVolume,
     toggleMic,
     toggleCamera,
     toggleScreenShare,
@@ -211,6 +220,7 @@ export function useCallEngine(session: CallSession | null): UseCallEngineReturn 
     setSinkId,
     startCrosstalk,
     endCrosstalk,
+    setCrosstalkVolume,
     leave,
   };
 }
