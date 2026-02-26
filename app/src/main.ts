@@ -1,8 +1,9 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, Tray } from "electron";
 import path from "node:path";
 import crypto from "node:crypto";
 import started from "electron-squirrel-startup";
 import { parseTandemDeepLink } from "./deepLink";
+import { createTrayIcon, TrayStatus } from "./trayIcon";
 
 if (started) {
   app.quit();
@@ -17,6 +18,9 @@ type CallSession = {
 };
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let currentTrayStatus: TrayStatus = "available";
+let isQuitting = false;
 let pendingRoom: string | null = null;
 const callSessions = new Map<string, CallSession>();
 
@@ -25,6 +29,12 @@ function getBaseUrl(): string {
     return MAIN_WINDOW_VITE_DEV_SERVER_URL;
   }
   return `file://${path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)}`;
+}
+
+function showLobbyWindow(): void {
+  if (!mainWindow) return;
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 function createLobbyWindow(): BrowserWindow {
@@ -42,6 +52,19 @@ function createLobbyWindow(): BrowserWindow {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     window.webContents.openDevTools();
   }
+
+  // On macOS, hide the window instead of destroying it when the user
+  // clicks the red close button. The app stays alive in the tray.
+  window.on("close", (event) => {
+    if (process.platform === "darwin" && !isQuitting) {
+      event.preventDefault();
+      window.hide();
+    }
+  });
+
+  window.on("closed", () => {
+    mainWindow = null;
+  });
 
   return window;
 }
@@ -66,6 +89,74 @@ function createCallWindow(sessionId: string): BrowserWindow {
   return window;
 }
 
+// Tray
+
+function buildTrayContextMenu(): Menu {
+  return Menu.buildFromTemplate([
+    {
+      label: "Show Tandim",
+      click: showLobbyWindow,
+    },
+    { type: "separator" },
+    {
+      label: "Available",
+      type: "radio",
+      checked: currentTrayStatus === "available",
+      click: () => updateTrayStatus("available"),
+    },
+    {
+      label: "Do Not Disturb",
+      type: "radio",
+      checked: currentTrayStatus === "dnd",
+      click: () => updateTrayStatus("dnd"),
+    },
+    { type: "separator" },
+    {
+      label: "Quit Tandim",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+}
+
+function updateTrayStatus(status: TrayStatus): void {
+  currentTrayStatus = status;
+  if (!tray) return;
+  tray.setImage(createTrayIcon(status));
+  tray.setToolTip(`Tandim - ${status}`);
+  tray.setContextMenu(buildTrayContextMenu());
+}
+
+function createTray(): Tray {
+  const icon = createTrayIcon(currentTrayStatus);
+  const instance = new Tray(icon);
+
+  instance.setToolTip(`Tandim - ${currentTrayStatus}`);
+  instance.setContextMenu(buildTrayContextMenu());
+
+  // macOS: click the tray icon to toggle lobby window visibility
+  if (process.platform === "darwin") {
+    instance.on("click", () => {
+      if (mainWindow?.isVisible()) {
+        mainWindow.hide();
+      } else {
+        showLobbyWindow();
+      }
+    });
+  }
+
+  // Windows / Linux: double-click to show the lobby window
+  if (process.platform !== "darwin") {
+    instance.on("double-click", () => {
+      showLobbyWindow();
+    });
+  }
+
+  return instance;
+}
+
 // IPC handlers
 
 ipcMain.handle("deep-link:getPendingRoom", () => {
@@ -83,6 +174,10 @@ ipcMain.handle("call:openWindow", (_event, payload: CallSession) => {
 
 ipcMain.handle("call:getSession", (_event, sessionId: string) => {
   return callSessions.get(sessionId) ?? null;
+});
+
+ipcMain.on("tray:setStatus", (_event, status: TrayStatus) => {
+  updateTrayStatus(status);
 });
 
 // Deep link protocol
@@ -103,9 +198,26 @@ app.on("open-url", (_event, url) => {
 // App lifecycle
 
 app.on("ready", () => {
+  tray = createTray();
   mainWindow = createLobbyWindow();
 });
 
+app.on("before-quit", () => {
+  isQuitting = true;
+});
+
 app.on("window-all-closed", () => {
-  app.quit();
+  // On macOS the app stays alive in the tray even when all windows close.
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
+
+// macOS: re-show the lobby when the dock icon is clicked.
+app.on("activate", () => {
+  if (mainWindow) {
+    showLobbyWindow();
+  } else {
+    mainWindow = createLobbyWindow();
+  }
 });
