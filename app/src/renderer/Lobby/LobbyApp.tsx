@@ -131,8 +131,9 @@ function AuthenticatedLobby({
       const res = await fetch(`${API_URL}/api/room-definitions`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setRooms(data);
+        const rooms = Array.isArray(data) ? data : data.rooms;
+        if (Array.isArray(rooms) && rooms.length > 0) {
+          setRooms(rooms);
           return;
         }
       }

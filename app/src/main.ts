@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import started from "electron-squirrel-startup";
 import { parseTandemDeepLink, type DeepLinkRoute } from "./deepLink";
 import { createTrayIcon, TrayStatus } from "./trayIcon";
-import { checkForUpdates, registerAutoUpdateIpc } from "./autoUpdater";
+import { registerAutoUpdateIpc } from "./autoUpdater";
 
 if (started) {
   app.quit();
@@ -28,9 +28,6 @@ let pendingDeepLink: DeepLinkRoute | null = null;
 const callSessions = new Map<string, CallSession>();
 
 const isDev = !!MAIN_WINDOW_VITE_DEV_SERVER_URL;
-
-const UPDATE_CHECK_DELAY_MS = 10_000;
-const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1_000;
 
 function getBaseUrl(): string {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -313,12 +310,6 @@ app.on("ready", () => {
   globalShortcut.register(accelerator, () => {
     setDnd(!dndEnabled);
   });
-
-  // Check for updates in production only
-  if (!isDev) {
-    setTimeout(() => checkForUpdates(), UPDATE_CHECK_DELAY_MS);
-    setInterval(() => checkForUpdates(), UPDATE_CHECK_INTERVAL_MS);
-  }
 });
 
 app.on("before-quit", () => {

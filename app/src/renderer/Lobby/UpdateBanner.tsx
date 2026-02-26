@@ -2,52 +2,23 @@ import React, { useCallback, useEffect, useState } from "react";
 
 type UpdateState =
   | { status: "idle" }
-  | { status: "available"; version: string }
-  | { status: "downloading"; version: string; percent: number }
+  | { status: "downloading" }
   | { status: "ready"; version: string };
 
 export function UpdateBanner() {
   const [state, setState] = useState<UpdateState>({ status: "idle" });
 
   useEffect(() => {
-    window.tandim?.onUpdateAvailable((info) => {
-      setState({ status: "available", version: info.version });
+    window.tandim?.onUpdateAvailable(() => {
+      setState({ status: "downloading" });
     });
 
-    window.tandim?.onUpdateProgress((progress) => {
-      setState((prev) => {
-        if (prev.status === "available" || prev.status === "downloading") {
-          return {
-            status: "downloading",
-            version: prev.version,
-            percent: progress.percent,
-          };
-        }
-        return prev;
-      });
-    });
-
-    window.tandim?.onUpdateDownloaded(() => {
-      setState((prev) => {
-        if (prev.status === "downloading" || prev.status === "available") {
-          return { status: "ready", version: prev.version };
-        }
-        return prev;
-      });
+    window.tandim?.onUpdateDownloaded((info) => {
+      setState({ status: "ready", version: info.version });
     });
   }, []);
 
   const dismiss = useCallback(() => setState({ status: "idle" }), []);
-
-  const download = useCallback(() => {
-    window.tandim?.downloadUpdate();
-    setState((prev) => {
-      if (prev.status === "available") {
-        return { status: "downloading", version: prev.version, percent: 0 };
-      }
-      return prev;
-    });
-  }, []);
 
   const install = useCallback(() => {
     window.tandim?.installUpdate();
@@ -77,34 +48,16 @@ export function UpdateBanner() {
     );
   }
 
-  if (state.status === "downloading") {
-    return (
-      <div className="flex items-center justify-between border-b border-blue-900/50 bg-blue-950/50 px-4 py-2 text-xs text-blue-400">
-        <span>
-          Downloading update (v{state.version})... {state.percent.toFixed(0)}%
-        </span>
-      </div>
-    );
-  }
-
-  // status === "available"
+  // status === "downloading"
   return (
     <div className="flex items-center justify-between border-b border-blue-900/50 bg-blue-950/50 px-4 py-2 text-xs text-blue-400">
-      <span>Update available (v{state.version})</span>
-      <div className="flex gap-2">
-        <button
-          onClick={download}
-          className="rounded bg-blue-600 px-2 py-0.5 text-xs text-white hover:bg-blue-500"
-        >
-          Download
-        </button>
-        <button
-          onClick={dismiss}
-          className="text-blue-500 hover:text-blue-300"
-        >
-          Dismiss
-        </button>
-      </div>
+      <span>Downloading update...</span>
+      <button
+        onClick={dismiss}
+        className="text-blue-500 hover:text-blue-300"
+      >
+        Dismiss
+      </button>
     </div>
   );
 }

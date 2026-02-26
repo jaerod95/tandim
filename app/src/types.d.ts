@@ -41,13 +41,10 @@ type TandimBridge = {
   onDndToggle: (handler: (enabled: boolean) => void) => void;
   setDndFromRenderer: (enabled: boolean) => void;
 
-  // Auto-update
-  checkForUpdate: () => void;
-  downloadUpdate: () => void;
+  // Auto-update (uses update-electron-app with Forge GitHub releases)
   installUpdate: () => void;
-  onUpdateAvailable: (handler: (info: { version: string }) => void) => void;
-  onUpdateDownloaded: (handler: () => void) => void;
-  onUpdateProgress: (handler: (progress: { percent: number }) => void) => void;
+  onUpdateAvailable: (handler: () => void) => void;
+  onUpdateDownloaded: (handler: (info: { version: string }) => void) => void;
 };
 
 declare global {
