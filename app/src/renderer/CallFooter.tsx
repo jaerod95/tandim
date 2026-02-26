@@ -43,14 +43,23 @@ export default function CallFooter() {
       <div className="flex items-center gap-1">
         <button
           onClick={() => void engine.toggleScreenShare()}
-          className={`flex h-9 w-9 items-center justify-center rounded-md transition-colors ${
+          className={`flex h-9 items-center justify-center gap-1.5 rounded-md px-2 transition-colors ${
             engine.screenSharing
               ? "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30"
               : "text-zinc-500 hover:bg-zinc-800"
           }`}
           title={engine.screenSharing ? "Stop sharing" : "Share screen"}
         >
+          {engine.screenSharing && (
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
+            </span>
+          )}
           <Monitor className="h-4 w-4" />
+          {engine.screenSharing && (
+            <span className="text-xs font-medium">Sharing</span>
+          )}
         </button>
       </div>
 

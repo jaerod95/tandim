@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useCallContext } from "./CallContext";
 import { RemoteVideo } from "./RemoteVideo";
-import { Monitor } from "lucide-react";
+import { Monitor, Maximize, Minimize, Expand, Shrink } from "lucide-react";
 
 function LocalVideoPreview({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -26,26 +26,83 @@ function LocalVideoPreview({ stream }: { stream: MediaStream }) {
 }
 
 function ScreenShareView({ stream, label }: { stream: MediaStream; label: string }) {
-  const ref = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [objectFit, setObjectFit] = useState<"contain" | "cover">("contain");
+  const [showControls, setShowControls] = useState(false);
 
   useEffect(() => {
-    if (ref.current) {
-      ref.current.srcObject = stream;
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
     }
   }, [stream]);
 
+  // Listen for fullscreen change (user may exit via Esc key)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    if (!containerRef.current) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await containerRef.current.requestFullscreen();
+      }
+    } catch (err) {
+      console.error("Fullscreen toggle failed:", err);
+    }
+  }, []);
+
+  const toggleFit = useCallback(() => {
+    setObjectFit((prev) => (prev === "contain" ? "cover" : "contain"));
+  }, []);
+
   return (
-    <div className="relative flex-1 overflow-hidden rounded-lg bg-black">
+    <div
+      ref={containerRef}
+      className="group relative flex-1 overflow-hidden rounded-lg bg-black"
+      onMouseEnter={() => setShowControls(true)}
+      onMouseLeave={() => setShowControls(false)}
+    >
       <video
-        ref={ref}
+        ref={videoRef}
         autoPlay
         playsInline
         muted={false}
-        className="h-full w-full object-contain"
+        className={`h-full w-full ${objectFit === "contain" ? "object-contain" : "object-cover"}`}
       />
+      {/* Label */}
       <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded bg-black/60 px-2 py-1 text-xs text-white">
         <Monitor className="h-3 w-3" />
         {label}&apos;s screen
+      </div>
+      {/* Viewer controls — appear on hover */}
+      <div
+        className={`absolute right-2 top-2 flex items-center gap-1 transition-opacity duration-200 ${
+          showControls ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        <button
+          onClick={toggleFit}
+          className="flex h-8 w-8 items-center justify-center rounded bg-black/60 text-white transition-colors hover:bg-black/80"
+          title={objectFit === "contain" ? "Fill (crop to fit)" : "Fit (show all)"}
+        >
+          {objectFit === "contain" ? <Expand className="h-4 w-4" /> : <Shrink className="h-4 w-4" />}
+        </button>
+        <button
+          onClick={() => void toggleFullscreen()}
+          className="flex h-8 w-8 items-center justify-center rounded bg-black/60 text-white transition-colors hover:bg-black/80"
+          title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+        >
+          {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+        </button>
       </div>
     </div>
   );
