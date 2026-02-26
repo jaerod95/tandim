@@ -19,6 +19,12 @@ export type CallSession = {
   userId: string;
 };
 
+export type Crosstalk = {
+  id: string;
+  initiatorUserId: string;
+  participantUserIds: string[];
+};
+
 export const ROOMS = [
   { name: "Team Standup", emoji: "👥" },
   { name: "Lounge", emoji: "🏖️" },

@@ -1,7 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useCallContext } from "./CallContext";
 import { RemoteVideo } from "./RemoteVideo";
-import { Monitor } from "lucide-react";
+import { Monitor, MessageSquare } from "lucide-react";
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from "@/components/ui/context-menu";
+import type { Crosstalk } from "./types";
 
 function LocalVideoPreview({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -62,12 +69,73 @@ function EmptyStage() {
   );
 }
 
+function getCrosstalkVisualState(
+  userId: string,
+  activeCrosstalks: Crosstalk[],
+): "in-crosstalk" | "outside-crosstalk" | "none" {
+  if (activeCrosstalks.length === 0) return "none";
+  const isInAnyCrosstalk = activeCrosstalks.some((ct) =>
+    ct.participantUserIds.includes(userId),
+  );
+  return isInAnyCrosstalk ? "in-crosstalk" : "outside-crosstalk";
+}
+
+function TileWithContextMenu({
+  userId,
+  displayName,
+  stream,
+  crosstalkState,
+  onStartCrosstalk,
+}: {
+  userId: string;
+  displayName: string;
+  stream: MediaStream;
+  crosstalkState: "in-crosstalk" | "outside-crosstalk" | "none";
+  onStartCrosstalk: (targetUserId: string) => void;
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div>
+          <RemoteVideo
+            label={displayName}
+            stream={stream}
+            crosstalkState={crosstalkState}
+          />
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => onStartCrosstalk(userId)}>
+          <MessageSquare className="h-4 w-4" />
+          Crosstalk with {displayName}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 export default function CallStage() {
   const { engine } = useCallContext();
 
-  const { remoteTiles, screenShareTile, localStream, cameraEnabled, activeScreenSharerUserId, screenSharing } = engine;
+  const {
+    remoteTiles,
+    screenShareTile,
+    localStream,
+    cameraEnabled,
+    activeScreenSharerUserId,
+    screenSharing,
+    activeCrosstalks,
+    startCrosstalk,
+  } = engine;
 
-  // Screen share active — show focused layout
+  const handleStartCrosstalk = useCallback(
+    (targetUserId: string) => {
+      startCrosstalk([targetUserId]);
+    },
+    [startCrosstalk],
+  );
+
+  // Screen share active -- show focused layout
   if (activeScreenSharerUserId && screenShareTile) {
     return (
       <section className="relative flex flex-1 flex-col gap-3 overflow-hidden p-4">
@@ -80,7 +148,13 @@ export default function CallStage() {
           <div className="flex h-28 shrink-0 gap-2 overflow-x-auto">
             {remoteTiles.map((tile) => (
               <div key={tile.userId} className="h-full w-40 shrink-0">
-                <RemoteVideo label={tile.displayName} stream={tile.stream} />
+                <TileWithContextMenu
+                  userId={tile.userId}
+                  displayName={tile.displayName}
+                  stream={tile.stream}
+                  crosstalkState={getCrosstalkVisualState(tile.userId, activeCrosstalks)}
+                  onStartCrosstalk={handleStartCrosstalk}
+                />
               </div>
             ))}
           </div>
@@ -92,7 +166,7 @@ export default function CallStage() {
     );
   }
 
-  // Local user is sharing — show indicator + normal grid
+  // Local user is sharing -- show indicator + normal grid
   if (screenSharing) {
     return (
       <section className="relative flex flex-1 flex-col items-center justify-center gap-3 p-4">
@@ -107,10 +181,13 @@ export default function CallStage() {
             gridTemplateColumns: `repeat(${Math.min(remoteTiles.length, 3)}, minmax(0, 1fr))`,
           }}>
             {remoteTiles.map((tile) => (
-              <RemoteVideo
+              <TileWithContextMenu
                 key={tile.userId}
-                label={tile.displayName}
+                userId={tile.userId}
+                displayName={tile.displayName}
                 stream={tile.stream}
+                crosstalkState={getCrosstalkVisualState(tile.userId, activeCrosstalks)}
+                onStartCrosstalk={handleStartCrosstalk}
               />
             ))}
           </div>
@@ -132,10 +209,13 @@ export default function CallStage() {
           gridTemplateColumns: `repeat(${Math.min(remoteTiles.length, 3)}, minmax(0, 1fr))`,
         }}>
           {remoteTiles.map((tile) => (
-            <RemoteVideo
+            <TileWithContextMenu
               key={tile.userId}
-              label={tile.displayName}
+              userId={tile.userId}
+              displayName={tile.displayName}
               stream={tile.stream}
+              crosstalkState={getCrosstalkVisualState(tile.userId, activeCrosstalks)}
+              onStartCrosstalk={handleStartCrosstalk}
             />
           ))}
         </div>

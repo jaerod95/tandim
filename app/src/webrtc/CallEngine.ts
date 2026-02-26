@@ -1,6 +1,6 @@
 import { io, Socket } from "socket.io-client";
 import { PeerConnectionManager } from "./PeerConnectionManager";
-import type { CallSession, SignalPeer } from "../renderer/types";
+import type { CallSession, Crosstalk, SignalPeer } from "../renderer/types";
 
 export type CallEngineCallbacks = {
   onStatusChange: (status: string) => void;
@@ -15,6 +15,8 @@ export type CallEngineCallbacks = {
   onJoined: (peers: SignalPeer[]) => void;
   onDisconnected: () => void;
   onLocalStream: (stream: MediaStream) => void;
+  onCrosstalkStarted?: (crosstalk: Crosstalk) => void;
+  onCrosstalkEnded?: (crosstalkId: string) => void;
 };
 
 export class CallEngine {
@@ -211,6 +213,24 @@ export class CallEngine {
         this.callbacks.onRemoteScreenStreamRemoved(prevSharer);
       }
       this.callbacks.onScreenShareStopped();
+    });
+
+    this.socket.on("signal:crosstalk-started", (data: {
+      crosstalkId: string;
+      initiatorUserId: string;
+      participantUserIds: string[];
+    }) => {
+      if (this.destroyed) return;
+      this.callbacks.onCrosstalkStarted?.({
+        id: data.crosstalkId,
+        initiatorUserId: data.initiatorUserId,
+        participantUserIds: data.participantUserIds,
+      });
+    });
+
+    this.socket.on("signal:crosstalk-ended", (data: { crosstalkId: string }) => {
+      if (this.destroyed) return;
+      this.callbacks.onCrosstalkEnded?.(data.crosstalkId);
     });
 
     this.socket.on("signal:error", (data: { code: string; message: string }) => {
@@ -418,6 +438,14 @@ export class CallEngine {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = undefined;
     }
+  }
+
+  startCrosstalk(targetUserIds: string[]): void {
+    this.socket?.emit("signal:start-crosstalk", { targetUserIds });
+  }
+
+  endCrosstalk(crosstalkId: string): void {
+    this.socket?.emit("signal:end-crosstalk", { crosstalkId });
   }
 
   leave(): void {

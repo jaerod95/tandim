@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { MessageSquare } from "lucide-react";
+
+type CrosstalkVisualState = "in-crosstalk" | "outside-crosstalk" | "none";
 
 type RemoteVideoProps = {
   label: string;
   stream: MediaStream;
+  crosstalkState?: CrosstalkVisualState;
 };
 
-export function RemoteVideo({ label, stream }: RemoteVideoProps) {
+export function RemoteVideo({ label, stream, crosstalkState = "none" }: RemoteVideoProps) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const [hasVideo, setHasVideo] = useState(false);
 
@@ -43,8 +47,18 @@ export function RemoteVideo({ label, stream }: RemoteVideoProps) {
 
   const initials = label.charAt(0).toUpperCase();
 
+  const borderClass =
+    crosstalkState === "in-crosstalk"
+      ? "ring-2 ring-blue-500/60"
+      : "";
+
+  const opacityClass =
+    crosstalkState === "outside-crosstalk"
+      ? "opacity-50"
+      : "";
+
   return (
-    <article className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-zinc-800">
+    <article className={`relative flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-zinc-800 transition-all duration-200 ${borderClass} ${opacityClass}`}>
       {!hasVideo && (
         <div className="flex flex-col items-center gap-2">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-700 text-xl font-medium text-zinc-300">
@@ -61,8 +75,13 @@ export function RemoteVideo({ label, stream }: RemoteVideoProps) {
         className="h-full w-full object-cover"
         style={{ display: hasVideo ? "block" : "none" }}
       />
-      <div className="absolute bottom-2 left-2 rounded bg-black/50 px-1.5 py-0.5 text-xs text-white">
+      <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-black/50 px-1.5 py-0.5 text-xs text-white">
         {label}
+        {crosstalkState === "in-crosstalk" && (
+          <span className="ml-1 flex items-center gap-0.5 text-blue-300">
+            <MessageSquare className="h-3 w-3" />
+          </span>
+        )}
       </div>
     </article>
   );
