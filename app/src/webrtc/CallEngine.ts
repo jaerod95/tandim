@@ -40,7 +40,7 @@ export class CallEngine {
   private screenSenders: RTCRtpSender[] = [];
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private iceConfig: RTCConfiguration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-  private _micEnabled = true;
+  private _micEnabled: boolean;
   private _cameraEnabled = false;
   private _screenSharing = false;
   private _joined = false;
@@ -60,7 +60,9 @@ export class CallEngine {
   constructor(
     private session: CallSession,
     private callbacks: CallEngineCallbacks,
-  ) {}
+  ) {
+    this._micEnabled = session.audioEnabled;
+  }
 
   async join(): Promise<void> {
     this.callbacks.onStatusChange("Connecting...");
@@ -83,6 +85,12 @@ export class CallEngine {
         video: false,
       });
       this.callbacks.onLocalStream(this.localStream);
+      // Mute audio tracks if joining without audio
+      if (!this._micEnabled) {
+        for (const track of this.localStream.getAudioTracks()) {
+          track.enabled = false;
+        }
+      }
     } catch (err) {
       console.error("Failed to get local media:", err);
       this.callbacks.onStatusChange("Microphone access denied — joining in listen-only mode");

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 
 export type PresenceStatus = "available" | "in-call" | "idle" | "dnd" | "offline";
@@ -24,6 +24,7 @@ type UsePresenceReturn = {
   users: UserPresence[];
   connected: boolean;
   setStatus: (status: "available" | "idle" | "dnd") => void;
+  socketRef: React.RefObject<Socket | null>;
 };
 
 export function usePresence(options: UsePresenceOptions): UsePresenceReturn {
@@ -85,5 +86,5 @@ export function usePresence(options: UsePresenceOptions): UsePresenceReturn {
     };
   }, [apiUrl, workspaceId, userId, displayName]);
 
-  return { users, connected, setStatus };
+  return { users, connected, setStatus, socketRef };
 }

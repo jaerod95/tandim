@@ -12,6 +12,7 @@ export type RemoteTile = {
   version: number;
 };
 export type CallSession = {
+  audioEnabled: boolean;
   apiUrl: string;
   workspaceId: string;
   roomId: string;
@@ -25,11 +26,20 @@ export type Crosstalk = {
   participantUserIds: string[];
 };
 
-export const ROOMS = [
-  { name: "Team Standup", emoji: "👥" },
-  { name: "Lounge", emoji: "🏖️" },
-  { name: "Meeting Room", emoji: "📋" },
-  { name: "Help Needed", emoji: "⚡" },
-  { name: "Coffee Break", emoji: "☕" },
-  { name: "Library - Co-Working", emoji: "📚" },
+export type Room = {
+  id: string;
+  name: string;
+  emoji: string;
+};
+
+export const DEFAULT_ROOMS: Room[] = [
+  { id: "team-standup", name: "Team Standup", emoji: "\u{1F465}" },
+  { id: "lounge", name: "Lounge", emoji: "\u{1F3D6}\uFE0F" },
+  { id: "meeting-room", name: "Meeting Room", emoji: "\u{1F4CB}" },
+  { id: "help-needed", name: "Help Needed", emoji: "\u26A1" },
+  { id: "coffee-break", name: "Coffee Break", emoji: "\u2615" },
+  { id: "library-co-working", name: "Library - Co-Working", emoji: "\u{1F4DA}" },
 ];
+
+/** @deprecated Use DEFAULT_ROOMS and the Room type instead */
+export const ROOMS = DEFAULT_ROOMS;
